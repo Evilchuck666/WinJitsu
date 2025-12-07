@@ -1,0 +1,18 @@
+# Ignore everything in the root directory
+/*
+
+# Keep specific files in root
+!.gitattributes
+!.gitignore
+!LICENSE
+!README.md
+!pyproject.toml
+
+# Keep src directory
+!/src/
+
+# Ignore everything inside src by default
+/src/*
+
+# Keep winjitsu package inside src
+!/src/winjitsu/
