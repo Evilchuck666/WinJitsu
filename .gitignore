@@ -1,5 +1,8 @@
 .idea/
 .venv/
+
 AUR/
 src/*.egg-info/
+
+WinJitsu.code-workspace
 uv.lock
