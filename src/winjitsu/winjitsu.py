@@ -30,7 +30,7 @@ def _load_config():
     cfg = configparser.ConfigParser()
     cfg.read_dict({
         "animation": {"steps": "25"},
-        "display":   {"padding": "5", "fallback_width": "1920", "fallback_height": "1080"},
+        "display":   {"padding": "0", "fallback_width": "1920", "fallback_height": "1080"},
     })
     cfg.read(_CONFIG_PATH)
     return cfg
