@@ -156,6 +156,30 @@ def load_cache(window_id, wm_class):
     return {k: v for k, v in data.items() if k != "WM_CLASS"}
 
 
+def save_undo(window_id, data, wm_class):
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CACHE_DIR / f"{window_id}.undo.json", "w") as f:
+        json.dump({**data, "WM_CLASS": wm_class}, f)
+
+
+def load_undo(window_id, wm_class):
+    undo_file = CACHE_DIR / f"{window_id}.undo.json"
+    if not undo_file.exists():
+        return None
+    try:
+        with open(undo_file) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if data.get("WM_CLASS") != wm_class:
+        return None
+    return {k: v for k, v in data.items() if k != "WM_CLASS"}
+
+
+def clear_undo(window_id):
+    (CACHE_DIR / f"{window_id}.undo.json").unlink(missing_ok=True)
+
+
 def clear_cache():
     if CACHE_DIR.exists():
         shutil.rmtree(CACHE_DIR)
@@ -271,12 +295,38 @@ def toggle_display():
     )
 
 
+def undo():
+    win   = get_window_position()
+    saved = load_undo(win["WINDOW"], get_wm_class(win["WINDOW"]))
+    if saved:
+        move_window(
+            saved["WIDTH"], saved["HEIGHT"],
+            win["WINDOW"],
+            win["WIDTH"],  win["HEIGHT"],
+            win["X"],      win["Y"],
+            saved["X"],    saved["Y"],
+        )
+        clear_undo(win["WINDOW"])
+
+
 # ── Daemon ─────────────────────────────────────────────────────────────────
 
-VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
+VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC", "Z"]
+
+# Actions that should NOT trigger undo-state saving (they are restores or meta-actions)
+_NO_UNDO_SAVE = {"Z", "U", "TF", "CC"}
 
 
 def dispatch(action):
+    if action not in _NO_UNDO_SAVE:
+        try:
+            win      = get_window_position()
+            wm_class = get_wm_class(win["WINDOW"])
+            if load_undo(win["WINDOW"], wm_class) is None:
+                save_undo(win["WINDOW"], win, wm_class)
+        except RuntimeError:
+            pass
+
     if action in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"]:
         direction(action)
     elif action == "F":  fullscreen()
@@ -284,6 +334,7 @@ def dispatch(action):
     elif action == "TF": toggle_fullscreen()
     elif action == "TD": toggle_display()
     elif action == "CC": clear_cache()
+    elif action == "Z":  undo()
     else: raise ValueError(f"Unknown action: {action!r}")
 
 
@@ -375,6 +426,7 @@ actions:
     F               fullscreen (covers the entire monitor)
     U               restore window to its state before fullscreen
     TF              toggle fullscreen / restore
+    Z               undo — restore to original state before first winjitsu action
 
   multi-monitor:
     TD              move window to the next monitor
