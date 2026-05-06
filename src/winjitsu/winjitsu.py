@@ -5,6 +5,8 @@ import subprocess
 import time
 import argparse
 import re
+import json
+import shutil
 from pathlib import Path
 
 
@@ -73,32 +75,34 @@ def get_screens():
 
     return primary, others
 
-def save_pid(window_id, data):
-    if not CACHE_DIR.exists():
-        CACHE_DIR.mkdir(parents=True)
+def get_wm_class(window_id):
+    try:
+        return subprocess.check_output(
+            ["xdotool", "getwindowclassname", str(window_id)]
+        ).decode().strip()
+    except subprocess.CalledProcessError:
+        return None
 
-    pid_file = CACHE_DIR / f"{window_id}.pid"
-    # Save in shell variable format to match original, or just JSON?
-    # The original uses 'eval "$position"' which implies KEY=VALUE.
-    # We can just save the raw data we need.
-    with open(pid_file, "w") as f:
-        for k, v in data.items():
-            f.write(f"{k}={v}\n")
+def save_cache(window_id, data, wm_class):
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = CACHE_DIR / f"{window_id}.json"
+    with open(cache_file, "w") as f:
+        json.dump({**data, "WM_CLASS": wm_class}, f)
 
-def load_pid(window_id):
-    pid_file = CACHE_DIR / f"{window_id}.pid"
-    if pid_file.exists():
-        data = {}
-        with open(pid_file, "r") as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    data[k] = int(v)
-        return data
-    return None
+def load_cache(window_id, wm_class):
+    cache_file = CACHE_DIR / f"{window_id}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        with open(cache_file) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if data.get("WM_CLASS") != wm_class:
+        return None
+    return {k: v for k, v in data.items() if k != "WM_CLASS"}
 
 def clear_cache():
-    import shutil
     if CACHE_DIR.exists():
         shutil.rmtree(CACHE_DIR)
 
@@ -173,7 +177,7 @@ def get_screen_for_window(x_pos):
 
 def fullscreen():
     win = get_window_position()
-    save_pid(win['WINDOW'], win)
+    save_cache(win['WINDOW'], win, get_wm_class(win['WINDOW']))
 
     screen_w, screen_h, base_x_offset = get_screen_for_window(win['X'])
 
@@ -228,7 +232,7 @@ def unscreen():
     # target_x = stored X
     # target_y = stored Y
 
-    saved = load_pid(win['WINDOW'])
+    saved = load_cache(win['WINDOW'], get_wm_class(win['WINDOW']))
     if saved:
         target_w = saved['WIDTH']
         target_h = saved['HEIGHT']
