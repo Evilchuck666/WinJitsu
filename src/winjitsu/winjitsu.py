@@ -11,6 +11,7 @@ import socket
 import socketserver
 import threading
 import configparser
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -375,7 +376,7 @@ def _cleanup_runtime_files():
     PID_PATH.unlink(missing_ok=True)
 
 
-def run_daemon():
+def run_daemon(clear_cache_on_stop=True):
     _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     _cleanup_stale_runtime()
     PID_PATH.write_text(str(os.getpid()))
@@ -393,11 +394,26 @@ def run_daemon():
     stop_event.wait()
 
     try:
-        clear_cache()
+        if clear_cache_on_stop:
+            clear_cache()
     finally:
         server.shutdown()
         server.server_close()
         _cleanup_runtime_files()
+
+
+def _fork_daemon(clear_cache_on_stop=True):
+    _cleanup_stale_runtime()
+    pid = os.fork()
+    if pid > 0:
+        print(f"winjitsu daemon starting (PID {pid})")
+        sys.exit(0)
+    os.setsid()
+    devnull = open(os.devnull, "r+")
+    for fd in (0, 1, 2):
+        os.dup2(devnull.fileno(), fd)
+    devnull.close()
+    run_daemon(clear_cache_on_stop)
 
 
 def send_command(action):
@@ -461,10 +477,11 @@ def main():
     )
     parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION",
                         help="window management action (see below)")
-    parser.add_argument("--daemon",       action="store_true", help="start background daemon")
-    parser.add_argument("--write-config", action="store_true", help="create config file with defaults and exit")
-    parser.add_argument("--read-config",  metavar="PATH",      help="use a custom config file path")
-    parser.add_argument("--see-config",   action="store_true", help="print current config values and exit")
+    parser.add_argument("--daemon",         action="store_true", help="start background daemon")
+    parser.add_argument("--reload-daemon",  action="store_true", help="restart the background daemon (preserves cache)")
+    parser.add_argument("--write-config",   action="store_true", help="create config file with defaults and exit")
+    parser.add_argument("--read-config",    metavar="PATH",      help="use a custom config file path")
+    parser.add_argument("--see-config",     action="store_true", help="print current config values and exit")
     args = parser.parse_args()
 
     if args.write_config:
@@ -481,17 +498,33 @@ def main():
         return
 
     if args.daemon:
-        _cleanup_stale_runtime()
-        pid = os.fork()
-        if pid > 0:
-            print(f"winjitsu daemon starting (PID {pid})")
-            sys.exit(0)
-        os.setsid()
-        devnull = open(os.devnull, "r+")
-        for fd in (0, 1, 2):
-            os.dup2(devnull.fileno(), fd)
-        devnull.close()
-        run_daemon()
+        _fork_daemon()
+        return
+
+    if args.reload_daemon:
+        if not PID_PATH.exists():
+            print("No daemon running.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            old_pid = int(PID_PATH.read_text().strip())
+            os.kill(old_pid, signal.SIGTERM)
+        except (ValueError, ProcessLookupError):
+            print("No daemon running (stale PID file).", file=sys.stderr)
+            PID_PATH.unlink(missing_ok=True)
+            sys.exit(1)
+        except PermissionError:
+            print("Permission denied sending SIGTERM.", file=sys.stderr)
+            sys.exit(1)
+        for _ in range(50):
+            try:
+                os.kill(old_pid, 0)
+                time.sleep(0.1)
+            except ProcessLookupError:
+                break
+        else:
+            print("Daemon did not stop within 5 seconds.", file=sys.stderr)
+            sys.exit(1)
+        _fork_daemon(clear_cache_on_stop=False)
         return
 
     if args.action is None:
