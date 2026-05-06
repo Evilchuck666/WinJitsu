@@ -26,15 +26,44 @@ PID_PATH       = _RUNTIME_DIR / "winjitsu.pid"
 # ── Config ─────────────────────────────────────────────────────────────────
 _CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "winjitsu" / "config.ini"
 
-def _load_config():
+_CONFIG_TEMPLATE = """\
+# WinJitsu configuration
+
+[animation]
+# Steps in the window movement animation.
+# Higher = smoother but slower. Default: 25
+# steps = 25
+
+[display]
+# Gap in pixels around the window when using F (fullscreen).
+# 0 = true fullscreen, 5 = small gap on all sides. Default: 0
+# padding = 0
+
+# Fallback screen resolution used when xrandr cannot be read.
+# fallback_width  = 1920
+# fallback_height = 1080
+"""
+
+def _load_config(path=None):
     cfg = configparser.ConfigParser()
     cfg.read_dict({
         "animation": {"steps": "25"},
         "display":   {"padding": "0", "fallback_width": "1920", "fallback_height": "1080"},
     })
-    cfg.read(_CONFIG_PATH)
+    cfg.read(path or _CONFIG_PATH)
     return cfg
 
+def _write_config(path):
+    if path.exists():
+        answer = input(f"Config already exists: {path}\nOverwrite? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Aborted.")
+            return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_CONFIG_TEMPLATE)
+    print(f"Config written to: {path}")
+
+_active_config_path = _CONFIG_PATH
 _CFG       = _load_config()
 ANIM_STEPS = _CFG.getint("animation", "steps")
 PADDING    = _CFG.getint("display",   "padding")
@@ -333,11 +362,72 @@ def send_command(action):
 
 # ── Entry point ────────────────────────────────────────────────────────────
 
+_HELP_EPILOG = """
+actions:
+  grid snapping:
+    N / S           snap to top / bottom half of the screen
+    E / W           snap to right / left half of the screen
+    NE / NW         snap to top-right / top-left quarter
+    SE / SW         snap to bottom-right / bottom-left quarter
+    C               center window (keeps current size)
+
+  fullscreen:
+    F               fullscreen (covers the entire monitor)
+    U               restore window to its state before fullscreen
+    TF              toggle fullscreen / restore
+
+  multi-monitor:
+    TD              move window to the next monitor
+
+  cache:
+    CC              clear the window state cache
+
+config file: ~/.config/winjitsu/config.ini  (XDG_CONFIG_HOME honoured)
+  --write-config    create config file with defaults (all options commented out)
+  --read-config     use a different config file path
+  --see-config      show active config file and current values
+"""
+
 def main():
-    parser = argparse.ArgumentParser(description="Window management tool")
-    parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, help="Action to perform")
-    parser.add_argument("--daemon", action="store_true", help="Start background daemon")
+    # Pre-parse --read-config before the main parser so globals are updated
+    # before any action uses them.
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--read-config", metavar="PATH")
+    pre_args, _ = pre.parse_known_args()
+    if pre_args.read_config:
+        global ANIM_STEPS, PADDING, FALLBACK_W, FALLBACK_H, _active_config_path
+        _active_config_path = Path(pre_args.read_config)
+        _cfg = _load_config(_active_config_path)
+        ANIM_STEPS = _cfg.getint("animation", "steps")
+        PADDING    = _cfg.getint("display",   "padding")
+        FALLBACK_W = _cfg.getint("display",   "fallback_width")
+        FALLBACK_H = _cfg.getint("display",   "fallback_height")
+
+    parser = argparse.ArgumentParser(
+        description="Animated window management tool for Linux X11.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_HELP_EPILOG,
+    )
+    parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION",
+                        help="window management action (see below)")
+    parser.add_argument("--daemon",       action="store_true", help="start background daemon")
+    parser.add_argument("--write-config", action="store_true", help="create config file with defaults and exit")
+    parser.add_argument("--read-config",  metavar="PATH",      help="use a custom config file path")
+    parser.add_argument("--see-config",   action="store_true", help="print current config values and exit")
     args = parser.parse_args()
+
+    if args.write_config:
+        _write_config(_active_config_path)
+        return
+
+    if args.see_config:
+        status = "exists" if _active_config_path.exists() else "not found — using defaults"
+        print(f"config file : {_active_config_path}  ({status})")
+        print(f"steps       : {ANIM_STEPS}")
+        print(f"padding     : {PADDING}")
+        print(f"fallback_w  : {FALLBACK_W}")
+        print(f"fallback_h  : {FALLBACK_H}")
+        return
 
     if args.daemon:
         _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
