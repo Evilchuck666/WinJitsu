@@ -302,7 +302,11 @@ def toggle_display(win=None):
 
     tx = target["x"] + (win["X"] - current["x"])
     ty = target["y"] + (win["Y"] - current["y"])
-    _update_state(win, tx, ty, win["WIDTH"], win["HEIGHT"])
+    wm = get_wm_class(win["WINDOW"])
+    target_home = {"WINDOW": win["WINDOW"], "X": tx, "Y": ty,
+                   "WIDTH": win["WIDTH"], "HEIGHT": win["HEIGHT"],
+                   "SCREEN": all_screens.index(target)}
+    save_state(win["WINDOW"], target_home, tx, ty, win["WIDTH"], win["HEIGHT"], wm)
     move_window(win["WIDTH"], win["HEIGHT"], win["WINDOW"],
                 win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
