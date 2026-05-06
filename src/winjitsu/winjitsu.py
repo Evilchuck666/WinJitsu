@@ -149,48 +149,52 @@ def get_screen_for_window(x_pos):
 
 # ── Cache I/O ──────────────────────────────────────────────────────────────
 
-def save_cache(window_id, data, wm_class):
+def load_state(window_id, wm_class):
+    path = CACHE_DIR / f"{window_id}.json"
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if data.get("WM_CLASS") != wm_class:
+        return None
+    return data
+
+
+def save_state(window_id, home, tx, ty, tw, th, wm_class):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(CACHE_DIR / f"{window_id}.json", "w") as f:
-        json.dump({**data, "WM_CLASS": wm_class}, f)
+        json.dump({
+            "WINDOW": home["WINDOW"],
+            "X": home["X"], "Y": home["Y"],
+            "WIDTH": home["WIDTH"], "HEIGHT": home["HEIGHT"],
+            "SCREEN": home.get("SCREEN", 0),
+            "WM_CLASS": wm_class,
+            "_last_X": tx, "_last_Y": ty,
+            "_last_W": tw, "_last_H": th,
+        }, f)
 
 
-def load_cache(window_id, wm_class):
-    cache_file = CACHE_DIR / f"{window_id}.json"
-    if not cache_file.exists():
-        return None
-    try:
-        with open(cache_file) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if data.get("WM_CLASS") != wm_class:
-        return None
-    return {k: v for k, v in data.items() if k != "WM_CLASS"}
+def _resolve_home(win, existing):
+    if existing is None:
+        return win
+    last = (existing.get("_last_X"), existing.get("_last_Y"),
+            existing.get("_last_W"), existing.get("_last_H"))
+    if None in last:
+        return win
+    if (win["X"] == last[0] and win["Y"] == last[1] and
+            win["WIDTH"] == last[2] and win["HEIGHT"] == last[3]):
+        return {k: existing[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
+    return win
 
 
-def save_undo(window_id, data, wm_class):
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CACHE_DIR / f"{window_id}.undo.json", "w") as f:
-        json.dump({**data, "WM_CLASS": wm_class}, f)
-
-
-def load_undo(window_id, wm_class):
-    undo_file = CACHE_DIR / f"{window_id}.undo.json"
-    if not undo_file.exists():
-        return None
-    try:
-        with open(undo_file) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if data.get("WM_CLASS") != wm_class:
-        return None
-    return {k: v for k, v in data.items() if k != "WM_CLASS"}
-
-
-def clear_undo(window_id):
-    (CACHE_DIR / f"{window_id}.undo.json").unlink(missing_ok=True)
+def _update_state(win, tx, ty, tw, th):
+    wm = get_wm_class(win["WINDOW"])
+    existing = load_state(win["WINDOW"], wm)
+    home = _resolve_home(win, existing)
+    save_state(win["WINDOW"], home, tx, ty, tw, th, wm)
 
 
 def clear_cache():
@@ -222,19 +226,16 @@ def move_window(target_w, target_h, window_id, current_w, current_h, current_x, 
 
 def fullscreen(win=None):
     win = win or get_window_position()
-    save_cache(win["WINDOW"], win, get_wm_class(win["WINDOW"]))
     screen_w, screen_h, base_x = get_screen_for_window(win["X"])
-    move_window(
-        screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding,
-        win["WINDOW"],
-        win["WIDTH"], win["HEIGHT"], win["X"], win["Y"],
-        base_x + _CFG.padding, _CFG.padding,
-    )
+    tx, ty = base_x + _CFG.padding, _CFG.padding
+    tw, th = screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding
+    _update_state(win, tx, ty, tw, th)
+    move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
 
-def unscreen():
-    win   = get_window_position()
-    saved = load_cache(win["WINDOW"], get_wm_class(win["WINDOW"]))
+def restore(win=None):
+    win = win or get_window_position()
+    saved = load_state(win["WINDOW"], get_wm_class(win["WINDOW"]))
     if saved:
         move_window(
             saved["WIDTH"], saved["HEIGHT"],
@@ -249,9 +250,9 @@ def toggle_fullscreen(win=None):
     win = win or get_window_position()
     screen_w, screen_h, _ = get_screen_for_window(win["X"])
     if win["WIDTH"] == screen_w - 2 * _CFG.padding and win["HEIGHT"] == screen_h - 2 * _CFG.padding:
-        unscreen()
+        restore(win)
     else:
-        fullscreen()
+        fullscreen(win)
 
 
 def direction(direction_code, win=None):
@@ -274,6 +275,7 @@ def direction(direction_code, win=None):
                (screen_h - win["HEIGHT"]) / 2),
     }
     tw, th, tx, ty = targets[direction_code]
+    _update_state(win, tx, ty, tw, th)
     move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
 
@@ -290,56 +292,26 @@ def toggle_display(win=None):
     )
     target = all_screens[(all_screens.index(current) + 1) % len(all_screens)]
 
-    move_window(
-        win["WIDTH"], win["HEIGHT"],
-        win["WINDOW"],
-        win["WIDTH"],  win["HEIGHT"], win["X"], win["Y"],
-        target["x"] + (win["X"] - current["x"]),
-        target["y"] + (win["Y"] - current["y"]),
-    )
-
-
-def undo():
-    win   = get_window_position()
-    saved = load_undo(win["WINDOW"], get_wm_class(win["WINDOW"]))
-    if saved:
-        move_window(
-            saved["WIDTH"], saved["HEIGHT"],
-            win["WINDOW"],
-            win["WIDTH"],  win["HEIGHT"],
-            win["X"],      win["Y"],
-            saved["X"],    saved["Y"],
-        )
-        clear_undo(win["WINDOW"])
+    tx = target["x"] + (win["X"] - current["x"])
+    ty = target["y"] + (win["Y"] - current["y"])
+    _update_state(win, tx, ty, win["WIDTH"], win["HEIGHT"])
+    move_window(win["WIDTH"], win["HEIGHT"], win["WINDOW"],
+                win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
 
 # ── Daemon ─────────────────────────────────────────────────────────────────
 
-VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC", "Z"]
-
-# Actions that should NOT trigger undo-state saving (they are restores or meta-actions)
-_NO_UNDO_SAVE = {"Z", "U", "TF", "CC"}
+VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
 
 
 def dispatch(action):
-    win = None
-    if action not in _NO_UNDO_SAVE:
-        try:
-            win      = get_window_position()
-            wm_class = get_wm_class(win["WINDOW"])
-            if load_undo(win["WINDOW"], wm_class) is None:
-                save_undo(win["WINDOW"], win, wm_class)
-        except RuntimeError:
-            pass
-
     if action in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"]:
-        direction(action, win)
-    elif action == "F":  fullscreen(win)
-    elif action == "U":  unscreen()
-    elif action == "TF": toggle_fullscreen(win)
-    elif action == "TD": toggle_display(win)
+        direction(action)
+    elif action == "F":  fullscreen()
+    elif action == "U":  restore()
+    elif action == "TF": toggle_fullscreen()
+    elif action == "TD": toggle_display()
     elif action == "CC": clear_cache()
-    elif action == "Z":  undo()
     else: raise ValueError(f"Unknown action: {action!r}")
 
 
@@ -444,9 +416,8 @@ actions:
 
   fullscreen:
     F               fullscreen (covers the entire monitor)
-    U               restore window to its state before fullscreen
-    TF              toggle fullscreen / restore
-    Z               undo — restore to original state before first winjitsu action
+    U               restore window to its home position
+    TF              toggle fullscreen / restore home position
 
   multi-monitor:
     TD              move window to the next monitor
