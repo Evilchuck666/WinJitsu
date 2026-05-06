@@ -11,6 +11,7 @@ import socket
 import socketserver
 import threading
 import configparser
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -44,14 +45,30 @@ _CONFIG_TEMPLATE = """\
 # fallback_height = 1080
 """
 
+@dataclass
+class _Config:
+    steps: int
+    padding: int
+    fallback_w: int
+    fallback_h: int
+    path: Path
+
+
 def _load_config(path=None):
     cfg = configparser.ConfigParser()
     cfg.read_dict({
         "animation": {"steps": "25"},
         "display":   {"padding": "0", "fallback_width": "1920", "fallback_height": "1080"},
     })
-    cfg.read(path or _CONFIG_PATH)
-    return cfg
+    p = path or _CONFIG_PATH
+    cfg.read(p)
+    return _Config(
+        steps=cfg.getint("animation", "steps"),
+        padding=cfg.getint("display", "padding"),
+        fallback_w=cfg.getint("display", "fallback_width"),
+        fallback_h=cfg.getint("display", "fallback_height"),
+        path=p,
+    )
 
 def _write_config(path):
     if path.exists():
@@ -63,12 +80,7 @@ def _write_config(path):
     path.write_text(_CONFIG_TEMPLATE)
     print(f"Config written to: {path}")
 
-_active_config_path = _CONFIG_PATH
-_CFG       = _load_config()
-ANIM_STEPS = _CFG.getint("animation", "steps")
-PADDING    = _CFG.getint("display",   "padding")
-FALLBACK_W = _CFG.getint("display",   "fallback_width")
-FALLBACK_H = _CFG.getint("display",   "fallback_height")
+_CFG = _load_config()
 
 
 # ── X11 queries ────────────────────────────────────────────────────────────
@@ -125,7 +137,7 @@ def get_wm_class(window_id):
 def get_screen_for_window(x_pos):
     primary, others = get_screens()
     if not primary:
-        return FALLBACK_W, FALLBACK_H, 0
+        return _CFG.fallback_w, _CFG.fallback_h, 0
 
     for screen in [primary] + others:
         if screen["x"] <= x_pos < screen["x"] + screen["width"]:
@@ -188,43 +200,34 @@ def clear_cache():
 # ── Animation ──────────────────────────────────────────────────────────────
 
 def move_window(target_w, target_h, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
-    w_step = (target_w - current_w) / ANIM_STEPS
-    h_step = (target_h - current_h) / ANIM_STEPS
-    x_step = (current_x - target_x) / ANIM_STEPS
-    y_step = (current_y - target_y) / ANIM_STEPS
+    def _ease(t):
+        return t * t * (3.0 - 2.0 * t)
 
-    new_w, new_h, new_x, new_y = current_w, current_h, current_x, current_y
     wid = str(window_id)
-
-    for _ in range(ANIM_STEPS):
-        new_w += w_step
-        new_h += h_step
-        new_x -= x_step
-        new_y -= y_step
+    for i in range(1, _CFG.steps + 1):
+        t = _ease(i / _CFG.steps)
+        w = current_w + (target_w - current_w) * t
+        h = current_h + (target_h - current_h) * t
+        x = current_x + (target_x - current_x) * t
+        y = current_y + (target_y - current_y) * t
         subprocess.run([
             "xdotool",
-            "windowsize", wid, str(round(new_w)), str(round(new_h)),
-            "windowmove", wid, str(round(new_x)), str(round(new_y)),
+            "windowsize", wid, str(round(w)), str(round(h)),
+            "windowmove", wid, str(round(x)), str(round(y)),
         ])
-
-    subprocess.run([
-        "xdotool",
-        "windowsize", wid, str(int(target_w)), str(int(target_h)),
-        "windowmove", wid, str(int(target_x)), str(int(target_y)),
-    ])
 
 
 # ── Actions ────────────────────────────────────────────────────────────────
 
-def fullscreen():
-    win = get_window_position()
+def fullscreen(win=None):
+    win = win or get_window_position()
     save_cache(win["WINDOW"], win, get_wm_class(win["WINDOW"]))
     screen_w, screen_h, base_x = get_screen_for_window(win["X"])
     move_window(
-        screen_w - 2 * PADDING, screen_h - 2 * PADDING,
+        screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding,
         win["WINDOW"],
         win["WIDTH"], win["HEIGHT"], win["X"], win["Y"],
-        base_x + PADDING, PADDING,
+        base_x + _CFG.padding, _CFG.padding,
     )
 
 
@@ -241,17 +244,17 @@ def unscreen():
         )
 
 
-def toggle_fullscreen():
-    win = get_window_position()
-    screen_w, _, _ = get_screen_for_window(win["X"])
-    if win["WIDTH"] == screen_w - 2 * PADDING:
+def toggle_fullscreen(win=None):
+    win = win or get_window_position()
+    screen_w, screen_h, _ = get_screen_for_window(win["X"])
+    if win["WIDTH"] == screen_w - 2 * _CFG.padding and win["HEIGHT"] == screen_h - 2 * _CFG.padding:
         unscreen()
     else:
         fullscreen()
 
 
-def direction(direction_code):
-    win = get_window_position()
+def direction(direction_code, win=None):
+    win = win or get_window_position()
     screen_w, screen_h, base_x = get_screen_for_window(win["X"])
     half_w = screen_w / 2
     half_h = screen_h / 2
@@ -273,8 +276,8 @@ def direction(direction_code):
     move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
 
-def toggle_display():
-    win = get_window_position()
+def toggle_display(win=None):
+    win = win or get_window_position()
     primary, others = get_screens()
     if not primary or not others:
         return
@@ -318,6 +321,7 @@ _NO_UNDO_SAVE = {"Z", "U", "TF", "CC"}
 
 
 def dispatch(action):
+    win = None
     if action not in _NO_UNDO_SAVE:
         try:
             win      = get_window_position()
@@ -328,11 +332,11 @@ def dispatch(action):
             pass
 
     if action in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"]:
-        direction(action)
-    elif action == "F":  fullscreen()
+        direction(action, win)
+    elif action == "F":  fullscreen(win)
     elif action == "U":  unscreen()
-    elif action == "TF": toggle_fullscreen()
-    elif action == "TD": toggle_display()
+    elif action == "TF": toggle_fullscreen(win)
+    elif action == "TD": toggle_display(win)
     elif action == "CC": clear_cache()
     elif action == "Z":  undo()
     else: raise ValueError(f"Unknown action: {action!r}")
@@ -447,13 +451,8 @@ def main():
     pre.add_argument("--read-config", metavar="PATH")
     pre_args, _ = pre.parse_known_args()
     if pre_args.read_config:
-        global ANIM_STEPS, PADDING, FALLBACK_W, FALLBACK_H, _active_config_path
-        _active_config_path = Path(pre_args.read_config)
-        _cfg = _load_config(_active_config_path)
-        ANIM_STEPS = _cfg.getint("animation", "steps")
-        PADDING    = _cfg.getint("display",   "padding")
-        FALLBACK_W = _cfg.getint("display",   "fallback_width")
-        FALLBACK_H = _cfg.getint("display",   "fallback_height")
+        global _CFG
+        _CFG = _load_config(Path(pre_args.read_config))
 
     parser = argparse.ArgumentParser(
         description="Animated window management tool for Linux X11.",
@@ -469,31 +468,20 @@ def main():
     args = parser.parse_args()
 
     if args.write_config:
-        _write_config(_active_config_path)
+        _write_config(_CFG.path)
         return
 
     if args.see_config:
-        status = "exists" if _active_config_path.exists() else "not found — using defaults"
-        print(f"config file : {_active_config_path}  ({status})")
-        print(f"steps       : {ANIM_STEPS}")
-        print(f"padding     : {PADDING}")
-        print(f"fallback_w  : {FALLBACK_W}")
-        print(f"fallback_h  : {FALLBACK_H}")
+        status = "exists" if _CFG.path.exists() else "not found — using defaults"
+        print(f"config file : {_CFG.path}  ({status})")
+        print(f"steps       : {_CFG.steps}")
+        print(f"padding     : {_CFG.padding}")
+        print(f"fallback_w  : {_CFG.fallback_w}")
+        print(f"fallback_h  : {_CFG.fallback_h}")
         return
 
     if args.daemon:
-        _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        if PID_PATH.exists():
-            try:
-                existing_pid = int(PID_PATH.read_text().strip())
-                os.kill(existing_pid, 0)
-                print(f"winjitsu daemon already running (PID {existing_pid})", file=sys.stderr)
-                sys.exit(1)
-            except (ValueError, ProcessLookupError):
-                PID_PATH.unlink(missing_ok=True)
-            except PermissionError:
-                print("winjitsu daemon already running", file=sys.stderr)
-                sys.exit(1)
+        _cleanup_stale_runtime()
         pid = os.fork()
         if pid > 0:
             print(f"winjitsu daemon starting (PID {pid})")
