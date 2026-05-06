@@ -7,11 +7,20 @@ import argparse
 import re
 import json
 import shutil
+import signal
+import socket
+import socketserver
+import threading
 from pathlib import Path
 
 
 # Constants
 CACHE_DIR = Path.home() / ".cache" / "winjitsu"
+
+_XDG_DATA_HOME = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+_RUNTIME_DIR   = _XDG_DATA_HOME / "winjitsu"
+SOCKET_PATH    = _RUNTIME_DIR / "winjitsu.sock"
+PID_PATH       = _RUNTIME_DIR / "winjitsu.pid"
 
 def get_window_position():
     """
@@ -358,26 +367,133 @@ def toggle_display():
 
     move_window(win['WIDTH'], win['HEIGHT'], win['WINDOW'], win['WIDTH'], win['HEIGHT'], win['X'], win['Y'], target_x, win['Y'])
 
-def main():
-    parser = argparse.ArgumentParser(description="Window management script")
-    parser.add_argument("action", choices=["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"], help="Action to perform")
+VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
 
-    args = parser.parse_args()
-
-    action = args.action
-
+def dispatch(action):
     if action in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"]:
         direction(action)
-    elif action == "F":
-        fullscreen()
-    elif action == "U":
-        unscreen()
-    elif action == "TF":
-        toggle_fullscreen()
-    elif action == "TD":
-        toggle_display()
-    elif action == "CC":
+    elif action == "F":  fullscreen()
+    elif action == "U":  unscreen()
+    elif action == "TF": toggle_fullscreen()
+    elif action == "TD": toggle_display()
+    elif action == "CC": clear_cache()
+    else: raise ValueError(f"Unknown action: {action!r}")
+
+
+class _CommandHandler(socketserver.StreamRequestHandler):
+    timeout = 5
+
+    def handle(self):
+        line = self.rfile.readline(256).decode().strip()
+        if not line or line not in VALID_ACTIONS:
+            self.wfile.write(b"ERROR: invalid action\n")
+            return
+        self.wfile.write(b"OK\n")
+        self.wfile.flush()
+        dispatch(line)
+
+
+def _cleanup_stale_runtime():
+    if PID_PATH.exists():
+        try:
+            pid = int(PID_PATH.read_text().strip())
+            os.kill(pid, 0)
+            print(f"winjitsu daemon already running (PID {pid})", file=sys.stderr)
+            sys.exit(1)
+        except (ValueError, ProcessLookupError):
+            PID_PATH.unlink(missing_ok=True)
+        except PermissionError:
+            print("winjitsu daemon already running", file=sys.stderr)
+            sys.exit(1)
+    SOCKET_PATH.unlink(missing_ok=True)
+
+
+def _cleanup_runtime_files():
+    SOCKET_PATH.unlink(missing_ok=True)
+    PID_PATH.unlink(missing_ok=True)
+
+
+def run_daemon():
+    _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    _cleanup_stale_runtime()
+    PID_PATH.write_text(str(os.getpid()))
+
+    server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
+
+    stop_event = threading.Event()
+
+    def _on_signal(signum, frame):
+        stop_event.set()
+
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT,  _on_signal)
+
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    stop_event.wait()
+
+    try:
         clear_cache()
+    finally:
+        server.shutdown()
+        server.server_close()
+        _cleanup_runtime_files()
+
+
+def send_command(action):
+    if not SOCKET_PATH.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(2.0)
+            s.connect(str(SOCKET_PATH))
+            s.sendall(f"{action}\n".encode())
+            with s.makefile("r") as f:
+                response = f.readline().strip()
+        return response == "OK"
+    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
+        return False
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Window management tool")
+    parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, help="Action to perform")
+    parser.add_argument("--daemon", action="store_true", help="Start background daemon")
+    args = parser.parse_args()
+
+    if args.daemon:
+        _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        if PID_PATH.exists():
+            try:
+                existing_pid = int(PID_PATH.read_text().strip())
+                os.kill(existing_pid, 0)
+                print(f"winjitsu daemon already running (PID {existing_pid})", file=sys.stderr)
+                sys.exit(1)
+            except (ValueError, ProcessLookupError):
+                PID_PATH.unlink(missing_ok=True)
+            except PermissionError:
+                print("winjitsu daemon already running", file=sys.stderr)
+                sys.exit(1)
+        pid = os.fork()
+        if pid > 0:
+            print(f"winjitsu daemon starting (PID {pid})")
+            sys.exit(0)
+        os.setsid()
+        devnull = open(os.devnull, "r+")
+        for fd in (0, 1, 2):
+            os.dup2(devnull.fileno(), fd)
+        devnull.close()
+        run_daemon()
+        return
+
+    if args.action is None:
+        parser.print_help()
+        sys.exit(1)
+
+    if not send_command(args.action):
+        dispatch(args.action)
+
 
 if __name__ == "__main__":
     main()

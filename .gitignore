@@ -3,6 +3,7 @@
 
 AUR/
 src/*.egg-info/
+src/winjitsu/__pycache__/
 
 WinJitsu.code-workspace
 uv.lock
