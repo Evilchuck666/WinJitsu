@@ -232,9 +232,10 @@ def move_window(target_w, target_h, window_id, current_w, current_h, current_x, 
 
 # ── Actions ────────────────────────────────────────────────────────────────
 
-def fullscreen(win=None):
+def fullscreen(win=None, screen_w=None, screen_h=None, base_x=None):
     win = win or get_window_position()
-    screen_w, screen_h, base_x = get_screen_for_window(win["X"])
+    if screen_w is None:
+        screen_w, screen_h, base_x = get_screen_for_window(win["X"])
     tx, ty = base_x + _CFG.padding, _CFG.padding
     tw, th = screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding
     _update_state(win, tx, ty, tw, th)
@@ -256,15 +257,15 @@ def restore(win=None):
 
 def toggle_fullscreen(win=None):
     win = win or get_window_position()
-    screen_w, screen_h, _ = get_screen_for_window(win["X"])
+    screen_w, screen_h, base_x = get_screen_for_window(win["X"])
     if win["WIDTH"] == screen_w - 2 * _CFG.padding and win["HEIGHT"] == screen_h - 2 * _CFG.padding:
         restore(win)
     else:
-        fullscreen(win)
+        fullscreen(win, screen_w, screen_h, base_x)
 
 
-def direction(direction_code, win=None):
-    win = win or get_window_position()
+def direction(direction_code):
+    win = get_window_position()
     screen_w, screen_h, base_x = get_screen_for_window(win["X"])
     half_w = screen_w / 2
     half_h = screen_h / 2
@@ -287,8 +288,8 @@ def direction(direction_code, win=None):
     move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
 
 
-def toggle_display(win=None):
-    win = win or get_window_position()
+def toggle_display():
+    win = get_window_position()
     primary, others = get_screens()
     if not primary or not others:
         return
