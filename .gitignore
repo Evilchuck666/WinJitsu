@@ -1,5 +1,5 @@
 .idea/
 .venv/
 AUR/
-src/*/*
+src/*.egg-info/
 uv.lock
