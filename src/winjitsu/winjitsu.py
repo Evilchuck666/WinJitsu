@@ -44,6 +44,11 @@ _CONFIG_TEMPLATE = """\
 # Fallback screen resolution used when xrandr cannot be read.
 # fallback_width  = 1920
 # fallback_height = 1080
+
+[daemon]
+# Debounce delay in milliseconds. Rapid actions within this window are
+# collapsed into one — only the last one fires. Default: 250
+# debounce_ms = 250
 """
 
 @dataclass
@@ -52,6 +57,7 @@ class _Config:
     padding: int
     fallback_w: int
     fallback_h: int
+    debounce_ms: int
     path: Path
 
 
@@ -60,6 +66,7 @@ def _load_config(path=None):
     cfg.read_dict({
         "animation": {"steps": "25"},
         "display":   {"padding": "0", "fallback_width": "1920", "fallback_height": "1080"},
+        "daemon":    {"debounce_ms": "250"},
     })
     p = path or _CONFIG_PATH
     cfg.read(p)
@@ -68,6 +75,7 @@ def _load_config(path=None):
         padding=cfg.getint("display", "padding"),
         fallback_w=cfg.getint("display", "fallback_width"),
         fallback_h=cfg.getint("display", "fallback_height"),
+        debounce_ms=cfg.getint("daemon", "debounce_ms"),
         path=p,
     )
 
@@ -315,6 +323,26 @@ def dispatch(action):
     else: raise ValueError(f"Unknown action: {action!r}")
 
 
+_pending_timer = None
+_pending_lock  = threading.Lock()
+
+
+def _schedule_action(action):
+    global _pending_timer
+    with _pending_lock:
+        if _pending_timer is not None:
+            _pending_timer.cancel()
+        _pending_timer = threading.Timer(_CFG.debounce_ms / 1000, _run_action, args=(action,))
+        _pending_timer.start()
+
+
+def _run_action(action):
+    global _pending_timer
+    with _pending_lock:
+        _pending_timer = None
+    dispatch(action)
+
+
 class _CommandHandler(socketserver.StreamRequestHandler):
     timeout = 5
 
@@ -325,7 +353,7 @@ class _CommandHandler(socketserver.StreamRequestHandler):
             return
         self.wfile.write(b"OK\n")
         self.wfile.flush()
-        dispatch(line)
+        _schedule_action(line)
 
 
 def _cleanup_stale_runtime():
@@ -466,6 +494,7 @@ def main():
         print(f"padding     : {_CFG.padding}")
         print(f"fallback_w  : {_CFG.fallback_w}")
         print(f"fallback_h  : {_CFG.fallback_h}")
+        print(f"debounce_ms : {_CFG.debounce_ms}")
         return
 
     if args.daemon:
