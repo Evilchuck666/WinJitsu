@@ -220,6 +220,13 @@ def move_window(target_w, target_h, window_id, current_w, current_h, current_x, 
     def _ease(t):
         return t * t * (3.0 - 2.0 * t)
 
+    screen = _get_display().screen()
+    dw, dh = screen.width_in_pixels, screen.height_in_pixels
+    target_w = min(target_w, dw)
+    target_h = min(target_h, dh)
+    target_x = max(0, min(target_x, dw - target_w))
+    target_y = max(0, min(target_y, dh - target_h))
+
     wid = str(window_id)
     for i in range(1, _CFG.steps + 1):
         t = _ease(i / _CFG.steps)
