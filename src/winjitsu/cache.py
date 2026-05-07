@@ -36,17 +36,17 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
         }, f)
 
 
-def _resolve_home(win, existing):
-    if existing is None:
-        return win
-    last = (existing.get("_last_X"), existing.get("_last_Y"),
-            existing.get("_last_W"), existing.get("_last_H"))
-    if None in last:
-        return win
-    if (win["X"] == last[0] and win["Y"] == last[1] and
-            win["WIDTH"] == last[2] and win["HEIGHT"] == last[3]):
-        return {k: existing[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
-    return win
+def _resolve_home(current_window, cached_state):
+    if cached_state is None:
+        return current_window
+    last_target_geometry = (cached_state.get("_last_X"), cached_state.get("_last_Y"),
+                            cached_state.get("_last_W"), cached_state.get("_last_H"))
+    if None in last_target_geometry:
+        return current_window
+    if (current_window["X"] == last_target_geometry[0] and current_window["Y"] == last_target_geometry[1] and
+            current_window["WIDTH"] == last_target_geometry[2] and current_window["HEIGHT"] == last_target_geometry[3]):
+        return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
+    return current_window
 
 
 def _update_state(win, tx, ty, tw, th):
