@@ -39,8 +39,10 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
 def _resolve_home(current_window, cached_state):
     if cached_state is None:
         return current_window
-    last_target_geometry = (cached_state.get("_last_X"), cached_state.get("_last_Y"),
-                            cached_state.get("_last_W"), cached_state.get("_last_H"))
+    last_target_geometry = (
+        cached_state.get("_last_X"), cached_state.get("_last_Y"),
+        cached_state.get("_last_W"), cached_state.get("_last_H")
+    )
     if None in last_target_geometry:
         return current_window
     current_geometry = (current_window["X"], current_window["Y"],
