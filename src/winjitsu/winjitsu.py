@@ -306,9 +306,16 @@ def toggle_display():
         return
 
     all_screens = [primary] + others
+    win_cx = win["X"] + win["WIDTH"] / 2
+    win_cy = win["Y"] + win["HEIGHT"] / 2
+
+    def _dist(s):
+        return (win_cx - (s["x"] + s["width"] / 2)) ** 2 + (win_cy - (s["y"] + s["height"] / 2)) ** 2
+
     current = next(
-        (s for s in all_screens if s["x"] <= win["X"] < s["x"] + s["width"]),
-        primary,
+        (s for s in all_screens
+         if s["x"] <= win_cx < s["x"] + s["width"] and s["y"] <= win_cy < s["y"] + s["height"]),
+        min(all_screens, key=_dist),
     )
     target = all_screens[(all_screens.index(current) + 1) % len(all_screens)]
 
