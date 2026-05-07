@@ -28,17 +28,20 @@ def fullscreen(window=None, screen_width=None, screen_height=None, screen_origin
     )
 
 
-def restore(win=None):
-    win = win or get_window_position()
-    saved = load_state(win["WINDOW"], get_wm_class(win["WINDOW"]))
-    if saved:
-        move_window(
-            saved["WIDTH"], saved["HEIGHT"],
-            win["WINDOW"],
-            win["WIDTH"],  win["HEIGHT"],
-            win["X"],      win["Y"],
-            saved["X"],    saved["Y"],
-        )
+def restore(window=None):
+    window = window or get_window_position()
+    window_id = window["WINDOW"]
+    saved_state = load_state(window_id, get_wm_class(window_id))
+    if saved_state is None:
+        return
+
+    move_window(
+        saved_state["WIDTH"], saved_state["HEIGHT"],
+        window_id,
+        window["WIDTH"], window["HEIGHT"],
+        window["X"], window["Y"],
+        saved_state["X"], saved_state["Y"],
+    )
 
 
 def toggle_fullscreen(win=None):
