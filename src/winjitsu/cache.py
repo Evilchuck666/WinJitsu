@@ -22,17 +22,17 @@ def load_state(window_id, wm_class):
     return cached_state
 
 
-def save_state(window_id, home, tx, ty, tw, th, wm_class):
+def save_state(window_id, home_state, target_x, target_y, target_width, target_height, wm_class):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(CACHE_DIR / f"{window_id}.json", "w") as f:
         json.dump({
-            "WINDOW": home["WINDOW"],
-            "X": home["X"], "Y": home["Y"],
-            "WIDTH": home["WIDTH"], "HEIGHT": home["HEIGHT"],
-            "SCREEN": home.get("SCREEN", 0),
+            "WINDOW": home_state["WINDOW"],
+            "X": home_state["X"], "Y": home_state["Y"],
+            "WIDTH": home_state["WIDTH"], "HEIGHT": home_state["HEIGHT"],
+            "SCREEN": home_state.get("SCREEN", 0),
             "WM_CLASS": wm_class,
-            "_last_X": tx, "_last_Y": ty,
-            "_last_W": tw, "_last_H": th,
+            "_last_X": target_x, "_last_Y": target_y,
+            "_last_W": target_width, "_last_H": target_height,
         }, f)
 
 
