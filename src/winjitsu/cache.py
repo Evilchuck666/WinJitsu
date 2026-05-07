@@ -43,8 +43,9 @@ def _resolve_home(current_window, cached_state):
                             cached_state.get("_last_W"), cached_state.get("_last_H"))
     if None in last_target_geometry:
         return current_window
-    if (current_window["X"] == last_target_geometry[0] and current_window["Y"] == last_target_geometry[1] and
-            current_window["WIDTH"] == last_target_geometry[2] and current_window["HEIGHT"] == last_target_geometry[3]):
+    current_geometry = (current_window["X"], current_window["Y"],
+                        current_window["WIDTH"], current_window["HEIGHT"])
+    if current_geometry == last_target_geometry:
         return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
     return current_window
 
