@@ -9,17 +9,17 @@ CACHE_DIR = Path.home() / ".cache" / "winjitsu"
 
 
 def load_state(window_id, wm_class):
-    path = CACHE_DIR / f"{window_id}.json"
-    if not path.exists():
+    cache_file_path = CACHE_DIR / f"{window_id}.json"
+    if not cache_file_path.exists():
         return None
     try:
-        with open(path) as f:
-            data = json.load(f)
+        with open(cache_file_path) as f:
+            cached_state = json.load(f)
     except (json.JSONDecodeError, ValueError):
         return None
-    if data.get("WM_CLASS") != wm_class:
+    if cached_state.get("WM_CLASS") != wm_class:
         return None
-    return data
+    return cached_state
 
 
 def save_state(window_id, home, tx, ty, tw, th, wm_class):
