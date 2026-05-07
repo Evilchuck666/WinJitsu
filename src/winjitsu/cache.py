@@ -36,27 +36,27 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
         }, f)
 
 
-def _resolve_home(current_window, cached_state):
+def _resolve_home(window, cached_state):
     if cached_state is None:
-        return current_window
+        return window
     last_target_geometry = (
         cached_state.get("_last_X"), cached_state.get("_last_Y"),
         cached_state.get("_last_W"), cached_state.get("_last_H")
     )
     if None in last_target_geometry:
-        return current_window
-    current_geometry = (current_window["X"], current_window["Y"],
-                        current_window["WIDTH"], current_window["HEIGHT"])
+        return window
+    current_geometry = (window["X"], window["Y"],
+                        window["WIDTH"], window["HEIGHT"])
     if current_geometry == last_target_geometry:
         return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
-    return current_window
+    return window
 
 
-def _update_state(win, tx, ty, tw, th):
-    wm = get_wm_class(win["WINDOW"])
-    existing = load_state(win["WINDOW"], wm)
-    home = _resolve_home(win, existing)
-    save_state(win["WINDOW"], home, tx, ty, tw, th, wm)
+def _update_state(window, target_x, target_y, target_width, target_height):
+    wm_class = get_wm_class(window["WINDOW"])
+    cached_state = load_state(window["WINDOW"], wm_class)
+    home_state = _resolve_home(window, cached_state)
+    save_state(window["WINDOW"], home_state, target_x, target_y, target_width, target_height, wm_class)
 
 
 def clear_cache():
