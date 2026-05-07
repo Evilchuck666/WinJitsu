@@ -3,7 +3,6 @@ import os
 import sys
 import subprocess
 import argparse
-import re
 import json
 import shutil
 import signal
@@ -14,6 +13,8 @@ import configparser
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from Xlib import display as Xdisplay
+from Xlib.ext import randr
 
 
 # ── Cache ──────────────────────────────────────────────────────────────────
@@ -41,10 +42,6 @@ _CONFIG_TEMPLATE = """\
 # 0 = true fullscreen, 5 = small gap on all sides. Default: 0
 # padding = 0
 
-# Fallback screen resolution used when xrandr cannot be read.
-# fallback_width  = 1920
-# fallback_height = 1080
-
 [daemon]
 # Debounce delay in milliseconds. Rapid actions within this window are
 # collapsed into one — only the last one fires. Default: 250
@@ -55,8 +52,6 @@ _CONFIG_TEMPLATE = """\
 class _Config:
     steps: int
     padding: int
-    fallback_w: int
-    fallback_h: int
     debounce_ms: int
     path: Path
 
@@ -65,7 +60,7 @@ def _load_config(path=None):
     cfg = configparser.ConfigParser()
     cfg.read_dict({
         "animation": {"steps": "25"},
-        "display":   {"padding": "0", "fallback_width": "1920", "fallback_height": "1080"},
+        "display":   {"padding": "0"},
         "daemon":    {"debounce_ms": "250"},
     })
     p = path or _CONFIG_PATH
@@ -73,8 +68,6 @@ def _load_config(path=None):
     return _Config(
         steps=cfg.getint("animation", "steps"),
         padding=cfg.getint("display", "padding"),
-        fallback_w=cfg.getint("display", "fallback_width"),
-        fallback_h=cfg.getint("display", "fallback_height"),
         debounce_ms=cfg.getint("daemon", "debounce_ms"),
         path=p,
     )
@@ -90,6 +83,17 @@ def _write_config(path):
     print(f"Config written to: {path}")
 
 _CFG = _load_config()
+
+_display: "Xdisplay.Display | None" = None
+_display_lock = threading.Lock()
+
+def _get_display() -> Xdisplay.Display:
+    global _display
+    if _display is None:
+        with _display_lock:
+            if _display is None:
+                _display = Xdisplay.Display()
+    return _display
 
 
 # ── X11 queries ────────────────────────────────────────────────────────────
@@ -108,28 +112,27 @@ def get_window_position():
 
 
 def get_screens():
-    try:
-        out = subprocess.check_output(["xrandr"]).decode()
-    except subprocess.CalledProcessError:
-        raise RuntimeError("Could not run xrandr. Is it installed?")
+    display = _get_display()
+    if not display.has_extension('RANDR'):
+        raise RuntimeError("RandR extension not available.")
+    root      = display.screen().root
+    resources = root.xrandr_get_screen_resources()
+    ts        = resources.config_timestamp  # config_timestamp, NOT timestamp — timestamp causes BadMatch on some drivers
+    primary_id = root.xrandr_get_output_primary().output
 
     primary = None
     others  = []
 
-    for line in out.splitlines():
-        if " connected" not in line:
+    for output_id in resources.outputs:
+        info = display.xrandr_get_output_info(output_id, ts)
+        if info.connection != randr.Connected or not info.crtc:
             continue
-        is_primary = " primary " in line
-        # Parse WxH+X+Y directly from the "connected" line (active mode)
-        match = re.search(r'(\d+)x(\d+)\+(\d+)\+(\d+)', line)
-        if not match:
-            continue  # connected but no active mode (monitor off)
-        w, h, x, y = (int(match.group(i)) for i in range(1, 5))
-        screen = {"width": w, "height": h, "x": x, "y": y}
-        if is_primary:
-            primary = screen
+        crtc = display.xrandr_get_crtc_info(info.crtc, ts)
+        s = {"width": crtc.width, "height": crtc.height, "x": crtc.x, "y": crtc.y}
+        if output_id == primary_id:
+            primary = s
         else:
-            others.append(screen)
+            others.append(s)
 
     return primary, others
 
@@ -146,7 +149,8 @@ def get_wm_class(window_id):
 def get_screen_for_window(x_pos):
     primary, others = get_screens()
     if not primary:
-        return _CFG.fallback_w, _CFG.fallback_h, 0
+        d = _get_display().screen()
+        return d.width_in_pixels, d.height_in_pixels, 0
 
     for screen in [primary] + others:
         if screen["x"] <= x_pos < screen["x"] + screen["width"]:
@@ -497,8 +501,6 @@ def main():
         print(f"config file : {_CFG.path}  ({status})")
         print(f"steps       : {_CFG.steps}")
         print(f"padding     : {_CFG.padding}")
-        print(f"fallback_w  : {_CFG.fallback_w}")
-        print(f"fallback_h  : {_CFG.fallback_h}")
         print(f"debounce_ms : {_CFG.debounce_ms}")
         return
 
