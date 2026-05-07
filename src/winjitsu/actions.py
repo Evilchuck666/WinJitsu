@@ -99,34 +99,51 @@ def direction(direction_code):
 
 
 def toggle_display():
-    win = get_window_position()
-    primary, others = get_screens()
-    if not primary or not others:
+    window = get_window_position()
+    primary_screen, other_screens = get_screens()
+    if not primary_screen or not other_screens:
         return
 
-    all_screens = [primary] + others
-    win_cx = win["X"] + win["WIDTH"] / 2
-    win_cy = win["Y"] + win["HEIGHT"] / 2
+    all_screens = [primary_screen] + other_screens
+    window_center_x = window["X"] + window["WIDTH"] / 2
+    window_center_y = window["Y"] + window["HEIGHT"] / 2
 
-    def _dist(s):
-        return (win_cx - (s["x"] + s["width"] / 2)) ** 2 + (win_cy - (s["y"] + s["height"] / 2)) ** 2
+    def _distance_to_screen_center(screen):
+        screen_center_x = screen["x"] + screen["width"] / 2
+        screen_center_y = screen["y"] + screen["height"] / 2
+        return (window_center_x - screen_center_x) ** 2 + (window_center_y - screen_center_y) ** 2
 
-    current = next(
-        (s for s in all_screens
-         if s["x"] <= win_cx < s["x"] + s["width"] and s["y"] <= win_cy < s["y"] + s["height"]),
-        min(all_screens, key=_dist),
+    def _contains_window_center(screen):
+        return (screen["x"] <= window_center_x < screen["x"] + screen["width"]
+                and screen["y"] <= window_center_y < screen["y"] + screen["height"])
+
+    current_screen = next(
+        (screen for screen in all_screens if _contains_window_center(screen)),
+        min(all_screens, key=_distance_to_screen_center),
     )
-    target = all_screens[(all_screens.index(current) + 1) % len(all_screens)]
+    current_screen_index = all_screens.index(current_screen)
+    target_screen_index = (current_screen_index + 1) % len(all_screens)
+    target_screen = all_screens[target_screen_index]
 
-    tx = target["x"] + (win["X"] - current["x"])
-    ty = target["y"] + (win["Y"] - current["y"])
-    wm = get_wm_class(win["WINDOW"])
-    target_home = {"WINDOW": win["WINDOW"], "X": tx, "Y": ty,
-                   "WIDTH": win["WIDTH"], "HEIGHT": win["HEIGHT"],
-                   "SCREEN": all_screens.index(target)}
-    save_state(win["WINDOW"], target_home, tx, ty, win["WIDTH"], win["HEIGHT"], wm)
-    move_window(win["WIDTH"], win["HEIGHT"], win["WINDOW"],
-                win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
+    target_x = target_screen["x"] + (window["X"] - current_screen["x"])
+    target_y = target_screen["y"] + (window["Y"] - current_screen["y"])
+
+    window_id = window["WINDOW"]
+    wm_class = get_wm_class(window_id)
+    target_home_state = {
+        "WINDOW": window_id,
+        "X": target_x, "Y": target_y,
+        "WIDTH": window["WIDTH"], "HEIGHT": window["HEIGHT"],
+        "SCREEN": target_screen_index,
+    }
+    save_state(window_id, target_home_state, target_x, target_y, window["WIDTH"], window["HEIGHT"], wm_class)
+    move_window(
+        window["WIDTH"], window["HEIGHT"],
+        window_id,
+        window["WIDTH"], window["HEIGHT"],
+        window["X"], window["Y"],
+        target_x, target_y,
+    )
 
 
 def dispatch(action):
