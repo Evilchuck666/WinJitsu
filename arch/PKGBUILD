@@ -1,7 +1,7 @@
 # Maintainer: Evilchuck666 <carlos.martinez.medina1992@gmail.com>
 _pkgname=WinJitsu
 pkgname=winjitsu-git
-pkgver=r1.0000000
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="A slick, animated window management tool for Linux (X11)"
 arch=('any')
@@ -16,7 +16,7 @@ sha256sums=('SKIP')
 
 pkgver() {
     cd "$_pkgname"
-    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
 }
 
 build() {
