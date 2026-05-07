@@ -5,6 +5,7 @@ from .cache import load_state, save_state, clear_cache, _update_state
 
 
 VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
+DIRECTION_ACTIONS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"}
 
 
 def fullscreen(window=None, screen_width=None, screen_height=None, screen_origin_x=None, screen_origin_y=None):
@@ -146,12 +147,19 @@ def toggle_display():
     )
 
 
-def dispatch(action):
-    if action in ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"]:
-        direction(action)
-    elif action == "F":  fullscreen()
-    elif action == "U":  restore()
-    elif action == "TF": toggle_fullscreen()
-    elif action == "TD": toggle_display()
-    elif action == "CC": clear_cache()
-    else: raise ValueError(f"Unknown action: {action!r}")
+_ACTION_HANDLERS = {
+    "F":  fullscreen,
+    "U":  restore,
+    "TF": toggle_fullscreen,
+    "TD": toggle_display,
+    "CC": clear_cache,
+}
+
+
+def dispatch(action_code):
+    if action_code in DIRECTION_ACTIONS:
+        direction(action_code)
+    elif action_code in _ACTION_HANDLERS:
+        _ACTION_HANDLERS[action_code]()
+    else:
+        raise ValueError(f"Unknown action: {action_code!r}")
