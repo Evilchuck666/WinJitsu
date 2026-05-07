@@ -7,14 +7,25 @@ from .cache import load_state, save_state, clear_cache, _update_state
 VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
 
 
-def fullscreen(win=None, screen_w=None, screen_h=None, base_x=None, base_y=None):
-    win = win or get_window_position()
-    if screen_w is None:
-        screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
-    tx, ty = base_x + _CFG.padding, base_y + _CFG.padding
-    tw, th = screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding
-    _update_state(win, tx, ty, tw, th)
-    move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
+def fullscreen(window=None, screen_width=None, screen_height=None, screen_origin_x=None, screen_origin_y=None):
+    window = window or get_window_position()
+    if screen_width is None:
+        screen_width, screen_height, screen_origin_x, screen_origin_y = get_screen_for_window(window)
+
+    padding = _CFG.padding
+    target_x = screen_origin_x + padding
+    target_y = screen_origin_y + padding
+    target_width = screen_width - 2 * padding
+    target_height = screen_height - 2 * padding
+
+    _update_state(window, target_x, target_y, target_width, target_height)
+    move_window(
+        target_width, target_height,
+        window["WINDOW"],
+        window["WIDTH"], window["HEIGHT"],
+        window["X"], window["Y"],
+        target_x, target_y,
+    )
 
 
 def restore(win=None):
