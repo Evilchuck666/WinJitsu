@@ -44,13 +44,23 @@ def restore(window=None):
     )
 
 
-def toggle_fullscreen(win=None):
-    win = win or get_window_position()
-    screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
-    if win["WIDTH"] == screen_w - 2 * _CFG.padding and win["HEIGHT"] == screen_h - 2 * _CFG.padding:
-        restore(win)
+def toggle_fullscreen(window=None):
+    window = window or get_window_position()
+    screen_width, screen_height, screen_origin_x, screen_origin_y = get_screen_for_window(window)
+
+    padding = _CFG.padding
+    fullscreen_width = screen_width - 2 * padding
+    fullscreen_height = screen_height - 2 * padding
+
+    is_already_fullscreen = (
+        window["WIDTH"] == fullscreen_width
+        and window["HEIGHT"] == fullscreen_height
+    )
+
+    if is_already_fullscreen:
+        restore(window)
     else:
-        fullscreen(win, screen_w, screen_h, base_x, base_y)
+        fullscreen(window, screen_width, screen_height, screen_origin_x, screen_origin_y)
 
 
 def direction(direction_code):
