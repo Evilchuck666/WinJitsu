@@ -146,17 +146,25 @@ def get_wm_class(window_id):
         return None
 
 
-def get_screen_for_window(x_pos):
+def get_screen_for_window(win):
     primary, others = get_screens()
     if not primary:
         d = _get_display().screen()
-        return d.width_in_pixels, d.height_in_pixels, 0
+        return d.width_in_pixels, d.height_in_pixels, 0, 0
 
-    for screen in [primary] + others:
-        if screen["x"] <= x_pos < screen["x"] + screen["width"]:
-            return screen["width"], screen["height"], screen["x"]
+    all_screens = [primary] + others
+    win_cx = win["X"] + win["WIDTH"] / 2
+    win_cy = win["Y"] + win["HEIGHT"] / 2
 
-    return primary["width"], primary["height"], primary["x"]
+    def _dist(s):
+        return (win_cx - (s["x"] + s["width"] / 2)) ** 2 + (win_cy - (s["y"] + s["height"] / 2)) ** 2
+
+    screen = next(
+        (s for s in all_screens
+         if s["x"] <= win_cx < s["x"] + s["width"] and s["y"] <= win_cy < s["y"] + s["height"]),
+        min(all_screens, key=_dist),
+    )
+    return screen["width"], screen["height"], screen["x"], screen["y"]
 
 
 # ── Cache I/O ──────────────────────────────────────────────────────────────
@@ -243,11 +251,11 @@ def move_window(target_w, target_h, window_id, current_w, current_h, current_x, 
 
 # ── Actions ────────────────────────────────────────────────────────────────
 
-def fullscreen(win=None, screen_w=None, screen_h=None, base_x=None):
+def fullscreen(win=None, screen_w=None, screen_h=None, base_x=None, base_y=None):
     win = win or get_window_position()
     if screen_w is None:
-        screen_w, screen_h, base_x = get_screen_for_window(win["X"])
-    tx, ty = base_x + _CFG.padding, _CFG.padding
+        screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
+    tx, ty = base_x + _CFG.padding, base_y + _CFG.padding
     tw, th = screen_w - 2 * _CFG.padding, screen_h - 2 * _CFG.padding
     _update_state(win, tx, ty, tw, th)
     move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
@@ -268,31 +276,31 @@ def restore(win=None):
 
 def toggle_fullscreen(win=None):
     win = win or get_window_position()
-    screen_w, screen_h, base_x = get_screen_for_window(win["X"])
+    screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
     if win["WIDTH"] == screen_w - 2 * _CFG.padding and win["HEIGHT"] == screen_h - 2 * _CFG.padding:
         restore(win)
     else:
-        fullscreen(win, screen_w, screen_h, base_x)
+        fullscreen(win, screen_w, screen_h, base_x, base_y)
 
 
 def direction(direction_code):
     win = get_window_position()
-    screen_w, screen_h, base_x = get_screen_for_window(win["X"])
+    screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
     half_w = screen_w / 2
     half_h = screen_h / 2
 
     targets = {
-        "N":  (screen_w, half_h,        base_x,          0),
-        "S":  (screen_w, half_h,        base_x,          half_h),
-        "E":  (half_w,   screen_h,      base_x + half_w, 0),
-        "W":  (half_w,   screen_h,      base_x,          0),
-        "NE": (half_w,   half_h,        base_x + half_w, 0),
-        "NW": (half_w,   half_h,        base_x,          0),
-        "SE": (half_w,   half_h,        base_x + half_w, half_h),
-        "SW": (half_w,   half_h,        base_x,          half_h),
+        "N":  (screen_w, half_h,        base_x,          base_y),
+        "S":  (screen_w, half_h,        base_x,          base_y + half_h),
+        "E":  (half_w,   screen_h,      base_x + half_w, base_y),
+        "W":  (half_w,   screen_h,      base_x,          base_y),
+        "NE": (half_w,   half_h,        base_x + half_w, base_y),
+        "NW": (half_w,   half_h,        base_x,          base_y),
+        "SE": (half_w,   half_h,        base_x + half_w, base_y + half_h),
+        "SW": (half_w,   half_h,        base_x,          base_y + half_h),
         "C":  (win["WIDTH"], win["HEIGHT"],
                (screen_w - win["WIDTH"])  / 2 + base_x,
-               (screen_h - win["HEIGHT"]) / 2),
+               (screen_h - win["HEIGHT"]) / 2 + base_y),
     }
     tw, th, tx, ty = targets[direction_code]
     _update_state(win, tx, ty, tw, th)
