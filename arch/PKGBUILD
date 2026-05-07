@@ -9,8 +9,6 @@ url="https://github.com/Evilchuck666/winjitsu"
 license=('GPL3')
 depends=('python' 'xdotool' 'python-xlib')
 makedepends=('git' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
-provides=('winjitsu')
-conflicts=('winjitsu')
 source=("$_pkgname::git+https://github.com/Evilchuck666/$_pkgname.git")
 sha256sums=('SKIP')
 
