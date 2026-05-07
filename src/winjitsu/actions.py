@@ -64,27 +64,38 @@ def toggle_fullscreen(window=None):
 
 
 def direction(direction_code):
-    win = get_window_position()
-    screen_w, screen_h, base_x, base_y = get_screen_for_window(win)
-    half_w = screen_w / 2
-    half_h = screen_h / 2
+    window = get_window_position()
+    screen_width, screen_height, screen_origin_x, screen_origin_y = get_screen_for_window(window)
+    half_width = screen_width / 2
+    half_height = screen_height / 2
 
-    targets = {
-        "N":  (screen_w, half_h,        base_x,          base_y),
-        "S":  (screen_w, half_h,        base_x,          base_y + half_h),
-        "E":  (half_w,   screen_h,      base_x + half_w, base_y),
-        "W":  (half_w,   screen_h,      base_x,          base_y),
-        "NE": (half_w,   half_h,        base_x + half_w, base_y),
-        "NW": (half_w,   half_h,        base_x,          base_y),
-        "SE": (half_w,   half_h,        base_x + half_w, base_y + half_h),
-        "SW": (half_w,   half_h,        base_x,          base_y + half_h),
-        "C":  (win["WIDTH"], win["HEIGHT"],
-               (screen_w - win["WIDTH"])  / 2 + base_x,
-               (screen_h - win["HEIGHT"]) / 2 + base_y),
+    centered_x = screen_origin_x + (screen_width - window["WIDTH"]) / 2
+    centered_y = screen_origin_y + (screen_height - window["HEIGHT"]) / 2
+
+    targets_by_direction = {
+        "N":  {"width": screen_width, "height": half_height,  "x": screen_origin_x,              "y": screen_origin_y},
+        "S":  {"width": screen_width, "height": half_height,  "x": screen_origin_x,              "y": screen_origin_y + half_height},
+        "E":  {"width": half_width,   "height": screen_height,"x": screen_origin_x + half_width, "y": screen_origin_y},
+        "W":  {"width": half_width,   "height": screen_height,"x": screen_origin_x,              "y": screen_origin_y},
+        "NE": {"width": half_width,   "height": half_height,  "x": screen_origin_x + half_width, "y": screen_origin_y},
+        "NW": {"width": half_width,   "height": half_height,  "x": screen_origin_x,              "y": screen_origin_y},
+        "SE": {"width": half_width,   "height": half_height,  "x": screen_origin_x + half_width, "y": screen_origin_y + half_height},
+        "SW": {"width": half_width,   "height": half_height,  "x": screen_origin_x,              "y": screen_origin_y + half_height},
+        "C":  {"width": window["WIDTH"], "height": window["HEIGHT"], "x": centered_x, "y": centered_y},
     }
-    tw, th, tx, ty = targets[direction_code]
-    _update_state(win, tx, ty, tw, th)
-    move_window(tw, th, win["WINDOW"], win["WIDTH"], win["HEIGHT"], win["X"], win["Y"], tx, ty)
+
+    target = targets_by_direction[direction_code]
+    target_width, target_height = target["width"], target["height"]
+    target_x, target_y = target["x"], target["y"]
+
+    _update_state(window, target_x, target_y, target_width, target_height)
+    move_window(
+        target_width, target_height,
+        window["WINDOW"],
+        window["WIDTH"], window["HEIGHT"],
+        window["X"], window["Y"],
+        target_x, target_y,
+    )
 
 
 def toggle_display():
