@@ -35,19 +35,19 @@ class _Config:
 
 
 def _load_config(path=None):
-    cfg = configparser.ConfigParser()
-    cfg.read_dict({
+    ini_parser = configparser.ConfigParser()
+    ini_parser.read_dict({
         "animation": {"steps": "25"},
         "display":   {"padding": "0"},
         "daemon":    {"debounce_ms": "250"},
     })
-    p = path or _CONFIG_PATH
-    cfg.read(p)
+    config_path = path or _CONFIG_PATH
+    ini_parser.read(config_path)
     return _Config(
-        steps=cfg.getint("animation", "steps"),
-        padding=cfg.getint("display", "padding"),
-        debounce_ms=cfg.getint("daemon", "debounce_ms"),
-        path=p,
+        steps=ini_parser.getint("animation", "steps"),
+        padding=ini_parser.getint("display", "padding"),
+        debounce_ms=ini_parser.getint("daemon", "debounce_ms"),
+        path=config_path,
     )
 
 
