@@ -2,6 +2,7 @@
 .venv/
 
 AUR/
+PKGs/
 src/*.egg-info/
 src/winjitsu/__pycache__/
 
