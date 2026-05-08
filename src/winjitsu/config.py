@@ -51,15 +51,15 @@ def _load_config(path=None):
     )
 
 
-def _write_config(path):
-    if path.exists():
-        answer = input(f"Config already exists: {path}\nOverwrite? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
+def _write_config(config_path):
+    if config_path.exists():
+        overwrite_response = input(f"Config already exists: {config_path}\nOverwrite? [y/N] ").strip().lower()
+        if overwrite_response not in ("y", "yes"):
             print("Aborted.")
             return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_CONFIG_TEMPLATE)
-    print(f"Config written to: {path}")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(_CONFIG_TEMPLATE)
+    print(f"Config written to: {config_path}")
 
 
 _CFG = _load_config()
