@@ -76,8 +76,8 @@ def run_daemon(clear_cache_on_stop=True):
     _cleanup_stale_runtime()
     PID_PATH.write_text(str(os.getpid()))
 
-    server     = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
-    stop_event = threading.Event()
+    socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
+    stop_event    = threading.Event()
 
     def _on_signal(signum, frame):
         stop_event.set()
@@ -85,15 +85,15 @@ def run_daemon(clear_cache_on_stop=True):
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT,  _on_signal)
 
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=socket_server.serve_forever, daemon=True).start()
     stop_event.wait()
 
     try:
         if clear_cache_on_stop:
             clear_cache()
     finally:
-        server.shutdown()
-        server.server_close()
+        socket_server.shutdown()
+        socket_server.server_close()
         _cleanup_runtime_files()
 
 
