@@ -18,39 +18,64 @@ SOCKET_PATH  = _RUNTIME_DIR / "winjitsu.sock"
 PID_PATH     = _RUNTIME_DIR / "winjitsu.pid"
 
 
-_pending_timer = None
-_pending_lock  = threading.Lock()
+class _Pending:
+    __slots__ = ("action", "event", "result")
+    def __init__(self, action):
+        self.action = action
+        self.event  = threading.Event()
+        self.result = []  # populated with one string before event is set
 
 
-def _schedule_action(action):
-    # Delay: cancel any pending action and restart the timer. Only the last
-    # action in a rapid burst fires, preventing duplicate moves from key repeat.
-    global _pending_timer
+_current_pending: "_Pending | None" = None
+_pending_timer:   "threading.Timer | None" = None
+_pending_lock = threading.Lock()
+
+
+def _schedule_action(action) -> _Pending:
+    # Delay: cancel the previous timer and supersede its waiter with "OK".
+    # Only the last action in a rapid burst actually executes.
+    global _current_pending, _pending_timer
+    pending = _Pending(action)
     with _pending_lock:
         if _pending_timer is not None:
             _pending_timer.cancel()
-        _pending_timer = threading.Timer(cfg.delay_ms / 1000, _run_action, args=(action,))
+        if _current_pending is not None:
+            _current_pending.result.append("OK")
+            _current_pending.event.set()
+        _current_pending = pending
+        _pending_timer = threading.Timer(cfg.delay_ms / 1000, _run_action)
         _pending_timer.start()
+    return pending
 
 
-def _run_action(action):
-    global _pending_timer
+def _run_action():
+    global _current_pending, _pending_timer
     with _pending_lock:
+        pending = _current_pending
+        _current_pending = None
         _pending_timer = None
-    dispatch(action)
+    if pending is None:
+        return
+    try:
+        result = dispatch(pending.action)
+        pending.result.append(result if result else "OK")
+    except Exception as e:
+        pending.result.append(f"ERROR: {e}")
+    pending.event.set()
 
 
 class _CommandHandler(socketserver.StreamRequestHandler):
-    timeout = 5
+    timeout = 15
 
     def handle(self):
         received_action = self.rfile.readline(256).decode().strip()
         if not received_action or received_action not in VALID_ACTIONS:
             self.wfile.write(b"ERROR: invalid action\n")
             return
-        self.wfile.write(b"OK\n")
-        self.wfile.flush()
-        _schedule_action(received_action)
+        pending = _schedule_action(received_action)
+        pending.event.wait(timeout=10.0)
+        response = pending.result[0] if pending.result else "ERROR: timeout"
+        self.wfile.write(f"{response}\n".encode())
 
 
 def _cleanup_stale_runtime():
@@ -118,11 +143,16 @@ def send_command(action):
         return False
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as unix_socket:
-            unix_socket.settimeout(2.0)
+            unix_socket.settimeout(10.0)
             unix_socket.connect(str(SOCKET_PATH))
             unix_socket.sendall(f"{action}\n".encode())
             with unix_socket.makefile("r") as response_reader:
                 response = response_reader.readline().strip()
-        return response == "OK"
+        if response.startswith("WARN:"):
+            print(response[5:].strip(), file=sys.stderr)
+        elif response.startswith("ERROR:"):
+            print(response[6:].strip(), file=sys.stderr)
+            return False
+        return True
     except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
         return False

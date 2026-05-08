@@ -71,7 +71,7 @@ def restore(window=None):
     window_id = window["WINDOW"]
     saved_state = load_state(window_id, get_wm_class(window_id))
     if saved_state is None:
-        return
+        return "WARN: no cached state for this window"
 
     move_window(
         saved_state["WIDTH"], saved_state["HEIGHT"],
@@ -80,6 +80,7 @@ def restore(window=None):
         window["X"], window["Y"],
         saved_state["X"], saved_state["Y"],
     )
+    return None
 
 
 def toggle_fullscreen(window=None):
@@ -166,7 +167,8 @@ _ACTION_HANDLERS = {
 def dispatch(action_code):
     if action_code in DIRECTION_ACTIONS:
         direction(action_code)
+        return None
     elif action_code in _ACTION_HANDLERS:
-        _ACTION_HANDLERS[action_code]()
+        return _ACTION_HANDLERS[action_code]()
     else:
         raise ValueError(f"Unknown action: {action_code!r}")
