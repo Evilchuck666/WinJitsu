@@ -42,13 +42,13 @@ class _CommandHandler(socketserver.StreamRequestHandler):
     timeout = 5
 
     def handle(self):
-        line = self.rfile.readline(256).decode().strip()
-        if not line or line not in VALID_ACTIONS:
+        received_action = self.rfile.readline(256).decode().strip()
+        if not received_action or received_action not in VALID_ACTIONS:
             self.wfile.write(b"ERROR: invalid action\n")
             return
         self.wfile.write(b"OK\n")
         self.wfile.flush()
-        _schedule_action(line)
+        _schedule_action(received_action)
 
 
 def _cleanup_stale_runtime():
