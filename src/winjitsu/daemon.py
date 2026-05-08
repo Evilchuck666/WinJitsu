@@ -80,6 +80,7 @@ def run_daemon():
     init_db()
     clear_cache()
 
+    # noinspection PyTypeChecker
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
     stop_event    = threading.Event()
 
