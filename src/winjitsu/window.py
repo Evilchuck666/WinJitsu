@@ -6,13 +6,13 @@ from .screen import _get_display
 
 def get_window_position():
     try:
-        wid = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
-        out = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", wid]).decode()
-        data = {}
-        for line in out.splitlines():
-            k, v = line.split("=", 1)
-            data[k] = int(v)
-        return data
+        window_id       = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
+        geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", window_id]).decode()
+        window_geometry = {}
+        for line in geometry_output.splitlines():
+            key, value = line.split("=", 1)
+            window_geometry[key] = int(value)
+        return window_geometry
     except subprocess.CalledProcessError:
         raise RuntimeError("Could not get window position. Is xdotool installed?")
 
@@ -26,26 +26,28 @@ def get_wm_class(window_id):
         return None
 
 
-def move_window(target_w, target_h, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
+def move_window(target_width, target_height, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
     def _ease(t):
+        # smoothstep: eases in and out, producing natural-feeling animation
         return t * t * (3.0 - 2.0 * t)
 
-    screen = _get_display().screen()
-    dw, dh = screen.width_in_pixels, screen.height_in_pixels
-    target_w = min(target_w, dw)
-    target_h = min(target_h, dh)
-    target_x = max(0, min(target_x, dw - target_w))
-    target_y = max(0, min(target_y, dh - target_h))
+    display_screen = _get_display().screen()
+    display_width, display_height = display_screen.width_in_pixels, display_screen.height_in_pixels
+    target_width  = min(target_width,  display_width)
+    target_height = min(target_height, display_height)
+    # Clamp to display bounds so the window never moves off-screen
+    target_x = max(0, min(target_x, display_width  - target_width))
+    target_y = max(0, min(target_y, display_height - target_height))
 
-    wid = str(window_id)
-    for i in range(1, _CFG.steps + 1):
-        t = _ease(i / _CFG.steps)
-        w = current_w + (target_w - current_w) * t
-        h = current_h + (target_h - current_h) * t
-        x = current_x + (target_x - current_x) * t
-        y = current_y + (target_y - current_y) * t
+    window_id_str = str(window_id)
+    for step in range(1, _CFG.steps + 1):
+        ease_factor    = _ease(step / _CFG.steps)
+        interp_width   = current_w + (target_width  - current_w) * ease_factor
+        interp_height  = current_h + (target_height - current_h) * ease_factor
+        interp_x       = current_x + (target_x - current_x) * ease_factor
+        interp_y       = current_y + (target_y - current_y) * ease_factor
         subprocess.run([
             "xdotool",
-            "windowsize", wid, str(round(w)), str(round(h)),
-            "windowmove", wid, str(round(x)), str(round(y)),
+            "windowsize", window_id_str, str(round(interp_width)), str(round(interp_height)),
+            "windowmove", window_id_str, str(round(interp_x)),     str(round(interp_y)),
         ])

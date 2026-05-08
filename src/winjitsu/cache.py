@@ -9,51 +9,58 @@ CACHE_DIR = Path.home() / ".cache" / "winjitsu"
 
 
 def load_state(window_id, wm_class):
-    path = CACHE_DIR / f"{window_id}.json"
-    if not path.exists():
+    cache_file_path = CACHE_DIR / f"{window_id}.json"
+    if not cache_file_path.exists():
         return None
     try:
-        with open(path) as f:
-            data = json.load(f)
+        with open(cache_file_path) as f:
+            cached_state = json.load(f)
     except (json.JSONDecodeError, ValueError):
         return None
-    if data.get("WM_CLASS") != wm_class:
+    # X11 window IDs are recycled across sessions — reject cache if the app changed
+    if cached_state.get("WM_CLASS") != wm_class:
         return None
-    return data
+    return cached_state
 
 
-def save_state(window_id, home, tx, ty, tw, th, wm_class):
+def save_state(window_id, home_state, target_x, target_y, target_width, target_height, wm_class):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(CACHE_DIR / f"{window_id}.json", "w") as f:
         json.dump({
-            "WINDOW": home["WINDOW"],
-            "X": home["X"], "Y": home["Y"],
-            "WIDTH": home["WIDTH"], "HEIGHT": home["HEIGHT"],
-            "SCREEN": home.get("SCREEN", 0),
+            "WINDOW": home_state["WINDOW"],
+            "X": home_state["X"], "Y": home_state["Y"],
+            "WIDTH": home_state["WIDTH"], "HEIGHT": home_state["HEIGHT"],
+            "SCREEN": home_state.get("SCREEN", 0),
             "WM_CLASS": wm_class,
-            "_last_X": tx, "_last_Y": ty,
-            "_last_W": tw, "_last_H": th,
+            "_last_X": target_x, "_last_Y": target_y,
+            "_last_W": target_width, "_last_H": target_height,
         }, f)
 
 
-def _resolve_home(win, existing):
-    if existing is None:
-        return win
-    last = (existing.get("_last_X"), existing.get("_last_Y"),
-            existing.get("_last_W"), existing.get("_last_H"))
-    if None in last:
-        return win
-    if (win["X"] == last[0] and win["Y"] == last[1] and
-            win["WIDTH"] == last[2] and win["HEIGHT"] == last[3]):
-        return {k: existing[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
-    return win
+def _resolve_home(window, cached_state):
+    # If the window is still at the last position we animated it to, the original
+    # home hasn't changed — reuse it. Otherwise the window moved elsewhere and its
+    # current position becomes the new home.
+    if cached_state is None:
+        return window
+    last_target_geometry = (
+        cached_state.get("_last_X"), cached_state.get("_last_Y"),
+        cached_state.get("_last_W"), cached_state.get("_last_H")
+    )
+    if None in last_target_geometry:
+        return window
+    current_geometry = (window["X"], window["Y"],
+                        window["WIDTH"], window["HEIGHT"])
+    if current_geometry == last_target_geometry:
+        return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
+    return window
 
 
-def _update_state(win, tx, ty, tw, th):
-    wm = get_wm_class(win["WINDOW"])
-    existing = load_state(win["WINDOW"], wm)
-    home = _resolve_home(win, existing)
-    save_state(win["WINDOW"], home, tx, ty, tw, th, wm)
+def _update_state(window, target_x, target_y, target_width, target_height):
+    wm_class = get_wm_class(window["WINDOW"])
+    cached_state = load_state(window["WINDOW"], wm_class)
+    home_state = _resolve_home(window, cached_state)
+    save_state(window["WINDOW"], home_state, target_x, target_y, target_width, target_height, wm_class)
 
 
 def clear_cache():
