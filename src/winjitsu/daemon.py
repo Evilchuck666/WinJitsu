@@ -54,9 +54,9 @@ class _CommandHandler(socketserver.StreamRequestHandler):
 def _cleanup_stale_runtime():
     if PID_PATH.exists():
         try:
-            pid = int(PID_PATH.read_text().strip())
-            os.kill(pid, 0)
-            print(f"winjitsu daemon already running (PID {pid})", file=sys.stderr)
+            stored_pid = int(PID_PATH.read_text().strip())
+            os.kill(stored_pid, 0)
+            print(f"winjitsu daemon already running (PID {stored_pid})", file=sys.stderr)
             sys.exit(1)
         except (ValueError, ProcessLookupError):
             PID_PATH.unlink(missing_ok=True)
