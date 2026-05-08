@@ -21,24 +21,25 @@ def get_screens():
     display = _get_display()
     if not display.has_extension('RANDR'):
         raise RuntimeError("RandR extension not available.")
-    root      = display.screen().root
-    resources = root.xrandr_get_screen_resources()
-    ts        = resources.config_timestamp  # config_timestamp, NOT timestamp — timestamp causes BadMatch on some drivers
-    primary_id = root.xrandr_get_output_primary().output
+    root             = display.screen().root
+    resources        = root.xrandr_get_screen_resources()
+    config_timestamp = resources.config_timestamp  # config_timestamp, NOT timestamp — timestamp causes BadMatch on some drivers
+    primary_id       = root.xrandr_get_output_primary().output
 
     primary = None
     others  = []
 
     for output_id in resources.outputs:
-        info = display.xrandr_get_output_info(output_id, ts)
-        if info.connection != randr.Connected or not info.crtc:
+        output_info = display.xrandr_get_output_info(output_id, config_timestamp)
+        if output_info.connection != randr.Connected or not output_info.crtc:
             continue
-        crtc = display.xrandr_get_crtc_info(info.crtc, ts)
-        s = {"width": crtc.width, "height": crtc.height, "x": crtc.x, "y": crtc.y}
+        crtc_info       = display.xrandr_get_crtc_info(output_info.crtc, config_timestamp)
+        screen_geometry = {"width": crtc_info.width, "height": crtc_info.height,
+                           "x": crtc_info.x, "y": crtc_info.y}
         if output_id == primary_id:
-            primary = s
+            primary = screen_geometry
         else:
-            others.append(s)
+            others.append(screen_geometry)
 
     return primary, others
 
