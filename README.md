@@ -26,29 +26,26 @@ Make sure you have the following installed on your system:
 
 -   Python 3.7+ 🐍
 -   `xdotool` (for window manipulation)
--   `python-xlib` (for screen detection via RandR)
+-   `python-xlib` / `python3-xlib` (for screen detection via RandR)
 
 ### Installing Dependencies
 
 ### 🐧 Arch‑based distributions (Arch Linux, EndeavourOS, Manjaro, etc.)
 
 ```bash
-sudo pacman -S python xdotool
-pip install python-xlib
+sudo pacman -S python xdotool python-xlib
 ```
 
 ### 🐧 Debian‑based distributions (Debian, Ubuntu, Linux Mint, etc.)
 
 ```bash
-sudo apt install python3 xdotool
-pip install python-xlib
+sudo apt install python3 xdotool python3-xlib
 ```
 
 ### 🐧 Fedora‑based distributions (Fedora, CentOS, etc.)
 
 ```bash
-sudo dnf install python3 xdotool
-pip install python-xlib
+sudo dnf install python3 xdotool python3-xlib
 ```
 
 
