@@ -14,6 +14,7 @@ def _get_display() -> Xdisplay.Display:
         with _display_lock:
             if _display is None:
                 _display = Xdisplay.Display()
+    assert _display is not None
     return _display
 
 

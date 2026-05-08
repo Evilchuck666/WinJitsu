@@ -5,7 +5,7 @@ import socketserver
 import signal
 import threading
 
-from .config import _CFG
+from .config import cfg
 from .actions import dispatch, VALID_ACTIONS
 from .cache import init_db, clear_cache
 
@@ -29,7 +29,7 @@ def _schedule_action(action):
     with _pending_lock:
         if _pending_timer is not None:
             _pending_timer.cancel()
-        _pending_timer = threading.Timer(_CFG.delay_ms / 1000, _run_action, args=(action,))
+        _pending_timer = threading.Timer(cfg.delay_ms / 1000, _run_action, args=(action,))
         _pending_timer.start()
 
 
@@ -83,7 +83,7 @@ def run_daemon():
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
     stop_event    = threading.Event()
 
-    def _on_signal(signum, frame):
+    def _on_signal(_signum, _frame):
         stop_event.set()
 
     signal.signal(signal.SIGTERM, _on_signal)

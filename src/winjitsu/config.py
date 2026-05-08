@@ -62,4 +62,4 @@ delay_ms = {active_config.delay_ms}
     print(f"Config written to: {config_path}")
 
 
-_CFG = _load_config()
+cfg = _load_config()

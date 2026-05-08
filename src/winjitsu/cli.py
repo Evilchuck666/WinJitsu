@@ -5,7 +5,7 @@ import signal
 import time
 from pathlib import Path
 
-from .config import _CFG, _load_config, _write_config
+from .config import _load_config, _write_config
 from .actions import dispatch, VALID_ACTIONS
 from .daemon import _fork_daemon, send_command, PID_PATH
 
@@ -46,7 +46,7 @@ def main():
     pre_parser.add_argument("--read-config", metavar="PATH")
     pre_parsed_args, _ = pre_parser.parse_known_args()
     if pre_parsed_args.read_config:
-        _config_module._CFG = _load_config(Path(pre_parsed_args.read_config))
+        _config_module.cfg = _load_config(Path(pre_parsed_args.read_config))
 
     parser = argparse.ArgumentParser(
         description="Animated window management tool for Linux X11.",
@@ -65,7 +65,7 @@ def main():
     parser.add_argument("--delay-ms",       type=int, metavar="MS", help="action delay in milliseconds, overrides config (default: 250)")
     parsed_args = parser.parse_args()
 
-    config = _config_module._CFG
+    config = _config_module.cfg
 
     # CLI flags override config file and defaults
     if parsed_args.steps    is not None: config.steps    = parsed_args.steps

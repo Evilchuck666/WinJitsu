@@ -1,6 +1,6 @@
 import subprocess
 
-from .config import _CFG
+from .config import cfg
 from .screen import _get_display
 
 
@@ -40,8 +40,8 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
     target_y = max(0, min(target_y, display_height - target_height))
 
     window_id_str = str(window_id)
-    for step in range(1, _CFG.steps + 1):
-        ease_factor    = _ease(step / _CFG.steps)
+    for step in range(1, cfg.steps + 1):
+        ease_factor    = _ease(step / cfg.steps)
         interp_width   = current_w + (target_width  - current_w) * ease_factor
         interp_height  = current_h + (target_height - current_h) * ease_factor
         interp_x       = current_x + (target_x - current_x) * ease_factor

@@ -1,4 +1,4 @@
-from .config import _CFG
+from .config import cfg
 from .screen import get_screens, get_screen_for_window
 from .window import get_window_position, get_wm_class, move_window
 from .cache import load_state, save_state, clear_cache, _update_state
@@ -50,7 +50,7 @@ def fullscreen(window=None, screen_width=None, screen_height=None, screen_origin
     if screen_width is None:
         screen_width, screen_height, screen_origin_x, screen_origin_y = get_screen_for_window(window)
 
-    padding = _CFG.padding
+    padding = cfg.padding
     target_x = screen_origin_x + padding
     target_y = screen_origin_y + padding
     target_width = screen_width - 2 * padding
@@ -86,7 +86,7 @@ def toggle_fullscreen(window=None):
     window = window or get_window_position()
     screen_width, screen_height, screen_origin_x, screen_origin_y = get_screen_for_window(window)
 
-    padding = _CFG.padding
+    padding = cfg.padding
     fullscreen_width = screen_width - 2 * padding
     fullscreen_height = screen_height - 2 * padding
 
