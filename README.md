@@ -1,5 +1,8 @@
 # 🥋 WinJitsu
 
+![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
+![License](https://img.shields.io/badge/license-GPLv3-green)
+
 **WinJitsu** is a slick, animated window management tool for Linux (X11).
 It allows you to effortlessly snap your active windows to various positions
 on your screen with smooth animations, making your workflow feel more organic and responsive. ✨
@@ -24,7 +27,7 @@ on your screen with smooth animations, making your workflow feel more organic an
 
 Make sure you have the following installed on your system:
 
--   Python 3.7+ 🐍
+-   Python 3.10+ 🐍
 -   `xdotool` (for window manipulation)
 -   `python-xlib` / `python3-xlib` (for screen detection via RandR)
 
