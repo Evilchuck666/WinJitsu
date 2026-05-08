@@ -7,7 +7,7 @@ import threading
 
 from .config import cfg
 from .actions import dispatch, VALID_ACTIONS
-from .cache import init_db, clear_cache
+from .cache import init_db
 
 
 _XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME", str(os.path.join(os.path.expanduser("~"), ".local", "share")))
