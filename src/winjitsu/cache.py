@@ -1,7 +1,6 @@
 import sqlite3
 from pathlib import Path
 from uuid import uuid4
-
 from .window import get_wm_class
 
 
@@ -28,42 +27,53 @@ CREATE TABLE IF NOT EXISTS windows (
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(_CREATE_TABLE)
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(_CREATE_TABLE)
 
 
 def load_state(window_id, wm_class):
     if wm_class is None:
         return None
+
     window_id = str(window_id)
+
     if not DB_PATH.exists():
         return None
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
+
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
             "SELECT * FROM windows WHERE window_id = ? AND wm_class = ?",
             (window_id, wm_class),
         ).fetchone()
+
     if row is None:
         return None
+
     return {
         "WINDOW":   row["window_id"],
-        "X":        row["x"],      "Y":      row["y"],
-        "WIDTH":    row["width"],  "HEIGHT": row["height"],
+        "X":        row["x"],
+        "Y":        row["y"],
+        "WIDTH":    row["width"],
+        "HEIGHT":   row["height"],
         "SCREEN":   row["screen"],
         "WM_CLASS": row["wm_class"],
-        "_last_X":  row["last_x"], "_last_Y": row["last_y"],
-        "_last_W":  row["last_w"], "_last_H": row["last_h"],
+        "_last_X":  row["last_x"],
+        "_last_Y":  row["last_y"],
+        "_last_W":  row["last_w"],
+        "_last_H":  row["last_h"],
     }
 
 
 def save_state(window_id, home_state, target_x, target_y, target_width, target_height, wm_class):
     if wm_class is None:
         return
+
     window_id  = str(window_id)
     home_state = {**home_state, "WINDOW": str(home_state["WINDOW"])}
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
+
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
             """
             INSERT INTO windows
                 (id, window_id, x, y, width, height, screen, wm_class,
@@ -77,13 +87,15 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
                 last_w=excluded.last_w, last_h=excluded.last_h
             """,
             (
-                str(uuid4()), window_id,
-                home_state["X"], home_state["Y"],
+                str(uuid4()),
+                window_id,
+                home_state["X"],     home_state["Y"],
                 home_state["WIDTH"], home_state["HEIGHT"],
                 home_state.get("SCREEN", 0),
                 wm_class,
-                target_x, target_y, target_width, target_height,
-            ),
+                target_x,     target_y,
+                target_width, target_height,
+            )
         )
 
 
@@ -93,33 +105,43 @@ def _resolve_home(window, cached_state):
     # current position becomes the new home.
     if cached_state is None:
         return window
+
     last_target_geometry = (
         cached_state.get("_last_X"), cached_state.get("_last_Y"),
         cached_state.get("_last_W"), cached_state.get("_last_H")
     )
+
     if None in last_target_geometry:
         return window
+
     current_geometry = (window["X"], window["Y"], window["WIDTH"], window["HEIGHT"])
     if current_geometry == last_target_geometry:
         return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
+
     return window
 
 
 def _update_state(window, target_x, target_y, target_width, target_height):
-    target_x, target_y = int(round(target_x)), int(round(target_y))
-    target_width, target_height = int(round(target_width)), int(round(target_height))
+    target_x = int(round(target_x))
+    target_y = int(round(target_y))
+
+    target_width  = int(round(target_width))
+    target_height = int(round(target_height))
+
     wm_class = get_wm_class(window["WINDOW"])
 
     if wm_class is None:
         return
     
     cached_state = load_state(window["WINDOW"], wm_class)
-    home_state = _resolve_home(window, cached_state)
+    home_state   = _resolve_home(window, cached_state)
+
     save_state(window["WINDOW"], home_state, target_x, target_y, target_width, target_height, wm_class)
 
 
 def clear_cache():
     if not DB_PATH.exists():
         return
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("DELETE FROM windows")
+
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute("DELETE FROM windows")
