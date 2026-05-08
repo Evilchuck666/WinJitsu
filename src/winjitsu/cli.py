@@ -3,11 +3,10 @@ import sys
 import argparse
 import signal
 import time
-from pathlib import Path
-
-from .config import _load_config, _write_config
+from pathlib  import Path
+from .config  import _load_config, _write_config
 from .actions import VALID_ACTIONS
-from .daemon import _fork_daemon, send_command, PID_PATH
+from .daemon  import _fork_daemon, send_command, PID_PATH
 
 
 _HELP_EPILOG = """
@@ -45,6 +44,7 @@ def main():
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--read-config", metavar="PATH")
     pre_parsed_args, _ = pre_parser.parse_known_args()
+
     if pre_parsed_args.read_config:
         new_cfg = _load_config(Path(pre_parsed_args.read_config))
         _config_module.cfg.steps    = new_cfg.steps
@@ -57,24 +57,28 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_HELP_EPILOG,
     )
-    parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION",
-                        help="window management action (see below)")
-    parser.add_argument("--daemon",         action="store_true",    help="start background daemon")
-    parser.add_argument("--reload-daemon",  action="store_true",    help="restart the background daemon")
-    parser.add_argument("--write-config",   action="store_true",    help="create config file with defaults and exit")
-    parser.add_argument("--read-config",    metavar="PATH",         help="use a custom config file path")
-    parser.add_argument("--see-config",     action="store_true",    help="print current config values and exit")
-    parser.add_argument("--steps",          type=int, metavar="N",  help="animation steps, overrides config (default: 25)")
-    parser.add_argument("--padding",        type=int, metavar="PX", help="fullscreen padding in pixels, overrides config (default: 0)")
-    parser.add_argument("--delay-ms",       type=int, metavar="MS", help="action delay in milliseconds, overrides config (default: 250)")
+    parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION", help="window management action (see below)")
+    parser.add_argument("--daemon",         action="store_true",                      help="start background daemon")
+    parser.add_argument("--reload-daemon",  action="store_true",                      help="restart the background daemon")
+    parser.add_argument("--write-config",   action="store_true",                      help="create config file with defaults and exit")
+    parser.add_argument("--read-config",    metavar="PATH",                           help="use a custom config file path")
+    parser.add_argument("--see-config",     action="store_true",                      help="print current config values and exit")
+    parser.add_argument("--steps",          type=int, metavar="N",                    help="animation steps, overrides config (default: 25)")
+    parser.add_argument("--padding",        type=int, metavar="PX",                   help="fullscreen padding in pixels, overrides config (default: 0)")
+    parser.add_argument("--delay-ms",       type=int, metavar="MS",                   help="action delay in milliseconds, overrides config (default: 250)")
     parsed_args = parser.parse_args()
 
     config = _config_module.cfg
 
     # CLI flags override config file and defaults
-    if parsed_args.steps    is not None: config.steps    = parsed_args.steps
-    if parsed_args.padding  is not None: config.padding  = parsed_args.padding
-    if parsed_args.delay_ms is not None: config.delay_ms = parsed_args.delay_ms
+    if parsed_args.steps    is not None:
+        config.steps    = parsed_args.steps
+
+    if parsed_args.padding  is not None:
+        config.padding  = parsed_args.padding
+
+    if parsed_args.delay_ms is not None:
+        config.delay_ms = parsed_args.delay_ms
 
     if parsed_args.write_config:
         _write_config(config.path, config)
@@ -96,6 +100,7 @@ def main():
         if not PID_PATH.exists():
             print("No daemon running.", file=sys.stderr)
             sys.exit(1)
+
         try:
             old_pid = int(PID_PATH.read_text().strip())
             os.kill(old_pid, signal.SIGTERM)
@@ -106,6 +111,7 @@ def main():
         except PermissionError:
             print("Permission denied sending SIGTERM.", file=sys.stderr)
             sys.exit(1)
+
         for _ in range(50):  # poll up to 5 s (50 × 0.1 s)
             try:
                 os.kill(old_pid, 0)  # signal 0: liveness check, no signal sent
@@ -116,6 +122,7 @@ def main():
             # loop completed without break — daemon did not stop in time
             print("Daemon did not stop within 5 seconds.", file=sys.stderr)
             sys.exit(1)
+            
         _fork_daemon()
         return
 
