@@ -100,6 +100,10 @@ def _resolve_home(window, cached_state):
 
 def _update_state(window, target_x, target_y, target_width, target_height):
     wm_class = get_wm_class(window["WINDOW"])
+
+    if wm_class is None:
+        return
+    
     cached_state = load_state(window["WINDOW"], wm_class)
     home_state = _resolve_home(window, cached_state)
     save_state(window["WINDOW"], home_state, target_x, target_y, target_width, target_height, wm_class)

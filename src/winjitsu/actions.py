@@ -141,7 +141,10 @@ def toggle_display():
         "WIDTH": window["WIDTH"], "HEIGHT": window["HEIGHT"],
         "SCREEN": target_screen_index,
     }
-    save_state(window_id, target_home_state, target_x, target_y, window["WIDTH"], window["HEIGHT"], wm_class)
+
+    if wm_class is not None:
+        save_state(window_id, target_home_state, target_x, target_y, window["WIDTH"], window["HEIGHT"], wm_class)
+
     move_window(
         window["WIDTH"], window["HEIGHT"],
         window_id,
