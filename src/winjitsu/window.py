@@ -32,7 +32,9 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
         return t * t * (3.0 - 2.0 * t)
 
     display_screen = _get_display().screen()
-    display_width, display_height = display_screen.width_in_pixels, display_screen.height_in_pixels
+    display_width  = int(display_screen.width_in_pixels)
+    display_height = int(display_screen.height_in_pixels)
+    
     target_width  = min(target_width,  display_width)
     target_height = min(target_height, display_height)
     # Clamp to display bounds so the window never moves off-screen
