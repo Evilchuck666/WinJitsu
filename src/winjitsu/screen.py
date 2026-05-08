@@ -1,19 +1,19 @@
 import threading
 
-from Xlib import display as Xdisplay
+from Xlib import display as xdisplay
 from Xlib.ext import randr
 
 
-_display: "Xdisplay.Display | None" = None
+_display: "xdisplay.Display | None" = None
 _display_lock = threading.Lock()
 
 
-def _get_display() -> Xdisplay.Display:
+def _get_display() -> xdisplay.Display:
     global _display
     if _display is None:
         with _display_lock:
             if _display is None:
-                _display = Xdisplay.Display()
+                _display = xdisplay.Display()
     assert _display is not None
     return _display
 
