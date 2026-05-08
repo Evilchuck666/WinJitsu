@@ -42,11 +42,11 @@ def main():
 
     # Pre-parse --read-config before the main parser so globals are updated
     # before any action uses them.
-    pre = argparse.ArgumentParser(add_help=False)
-    pre.add_argument("--read-config", metavar="PATH")
-    pre_args, _ = pre.parse_known_args()
-    if pre_args.read_config:
-        _config_module._CFG = _load_config(Path(pre_args.read_config))
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--read-config", metavar="PATH")
+    pre_parsed_args, _ = pre_parser.parse_known_args()
+    if pre_parsed_args.read_config:
+        _config_module._CFG = _load_config(Path(pre_parsed_args.read_config))
 
     parser = argparse.ArgumentParser(
         description="Animated window management tool for Linux X11.",
@@ -60,27 +60,27 @@ def main():
     parser.add_argument("--write-config",   action="store_true", help="create config file with defaults and exit")
     parser.add_argument("--read-config",    metavar="PATH",      help="use a custom config file path")
     parser.add_argument("--see-config",     action="store_true", help="print current config values and exit")
-    args = parser.parse_args()
+    parsed_args = parser.parse_args()
 
-    cfg = _config_module._CFG
+    config = _config_module._CFG
 
-    if args.write_config:
-        _write_config(cfg.path)
+    if parsed_args.write_config:
+        _write_config(config.path)
         return
 
-    if args.see_config:
-        status = "exists" if cfg.path.exists() else "not found — using defaults"
-        print(f"config file : {cfg.path}  ({status})")
-        print(f"steps       : {cfg.steps}")
-        print(f"padding     : {cfg.padding}")
-        print(f"debounce_ms : {cfg.debounce_ms}")
+    if parsed_args.see_config:
+        status = "exists" if config.path.exists() else "not found — using defaults"
+        print(f"config file : {config.path}  ({status})")
+        print(f"steps       : {config.steps}")
+        print(f"padding     : {config.padding}")
+        print(f"debounce_ms : {config.debounce_ms}")
         return
 
-    if args.daemon:
+    if parsed_args.daemon:
         _fork_daemon()
         return
 
-    if args.reload_daemon:
+    if parsed_args.reload_daemon:
         if not PID_PATH.exists():
             print("No daemon running.", file=sys.stderr)
             sys.exit(1)
@@ -106,13 +106,13 @@ def main():
         _fork_daemon(clear_cache_on_stop=False)
         return
 
-    if args.action is None:
+    if parsed_args.action is None:
         parser.print_help()
         sys.exit(1)
 
     try:
-        if not send_command(args.action):
-            dispatch(args.action)
+        if not send_command(parsed_args.action):
+            dispatch(parsed_args.action)
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
