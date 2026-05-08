@@ -43,8 +43,9 @@ def _schedule_action(action) -> _Pending:
             _current_pending.result.append("OK")
             _current_pending.event.set()
         _current_pending = pending
-        _pending_timer = threading.Timer(cfg.delay_ms / 1000, _run_action)
-        _pending_timer.start()
+        new_timer = threading.Timer(cfg.delay_ms / 1000, _run_action)
+        _pending_timer = new_timer
+        new_timer.start()
     return pending
 
 
