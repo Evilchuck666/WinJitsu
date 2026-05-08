@@ -20,9 +20,9 @@ _CONFIG_TEMPLATE = """\
 # padding = 0
 
 [daemon]
-# Debounce delay in milliseconds. Rapid actions within this window are
+# Delay in milliseconds. Rapid actions within this window are
 # collapsed into one — only the last one fires. Default: 250
-# debounce_ms = 250
+# delay_ms = 250
 """
 
 
@@ -30,7 +30,7 @@ _CONFIG_TEMPLATE = """\
 class _Config:
     steps: int
     padding: int
-    debounce_ms: int
+    delay_ms: int
     path: Path
 
 
@@ -39,14 +39,14 @@ def _load_config(path=None):
     ini_parser.read_dict({
         "animation": {"steps": "25"},
         "display":   {"padding": "0"},
-        "daemon":    {"debounce_ms": "250"},
+        "daemon":    {"delay_ms": "250"},
     })
     config_path = path or _CONFIG_PATH
     ini_parser.read(config_path)
     return _Config(
         steps=ini_parser.getint("animation", "steps"),
         padding=ini_parser.getint("display", "padding"),
-        debounce_ms=ini_parser.getint("daemon", "debounce_ms"),
+        delay_ms=ini_parser.getint("daemon", "delay_ms"),
         path=config_path,
     )
 

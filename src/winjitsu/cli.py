@@ -73,7 +73,7 @@ def main():
         print(f"config file : {config.path}  ({status})")
         print(f"steps       : {config.steps}")
         print(f"padding     : {config.padding}")
-        print(f"debounce_ms : {config.debounce_ms}")
+        print(f"delay_ms    : {config.delay_ms}")
         return
 
     if parsed_args.daemon:

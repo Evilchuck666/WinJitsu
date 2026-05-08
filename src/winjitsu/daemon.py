@@ -23,13 +23,13 @@ _pending_lock  = threading.Lock()
 
 
 def _schedule_action(action):
-    # Debounce: cancel any pending action and restart the timer. Only the last
+    # Delay: cancel any pending action and restart the timer. Only the last
     # action in a rapid burst fires, preventing duplicate moves from key repeat.
     global _pending_timer
     with _pending_lock:
         if _pending_timer is not None:
             _pending_timer.cancel()
-        _pending_timer = threading.Timer(_CFG.debounce_ms / 1000, _run_action, args=(action,))
+        _pending_timer = threading.Timer(_CFG.delay_ms / 1000, _run_action, args=(action,))
         _pending_timer.start()
 
 
