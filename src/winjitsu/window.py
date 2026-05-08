@@ -10,10 +10,12 @@ def get_window_position():
         geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", window_id]).decode()
         window_geometry = {}
         for line in geometry_output.splitlines():
+            if "=" not in line:
+                continue
             key, value = line.split("=", 1)
             window_geometry[key] = int(value)
         return window_geometry
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, ValueError):
         raise RuntimeError("Could not get window position. Is xdotool installed?")
 
 
