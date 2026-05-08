@@ -99,15 +99,15 @@ def run_daemon(clear_cache_on_stop=True):
 
 def _fork_daemon(clear_cache_on_stop=True):
     _cleanup_stale_runtime()
-    pid = os.fork()
-    if pid > 0:
-        print(f"winjitsu daemon starting (PID {pid})")
+    child_pid = os.fork()
+    if child_pid > 0:
+        print(f"winjitsu daemon starting (PID {child_pid})")
         sys.exit(0)
     os.setsid()
-    devnull = open(os.devnull, "r+")
+    devnull_file = open(os.devnull, "r+")
     for fd in (0, 1, 2):
-        os.dup2(devnull.fileno(), fd)
-    devnull.close()
+        os.dup2(devnull_file.fileno(), fd)
+    devnull_file.close()
     run_daemon(clear_cache_on_stop)
 
 
