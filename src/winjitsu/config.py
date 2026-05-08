@@ -25,12 +25,17 @@ def _load_config(path=None):
     })
     config_path = path or _CONFIG_PATH
     ini_parser.read(config_path)
-    return _Config(
-        steps=ini_parser.getint("animation", "steps"),
-        padding=ini_parser.getint("display", "padding"),
-        delay_ms=ini_parser.getint("daemon", "delay_ms"),
-        path=config_path,
-    )
+    try:
+        return _Config(
+            steps=ini_parser.getint("animation", "steps"),
+            padding=ini_parser.getint("display", "padding"),
+            delay_ms=ini_parser.getint("daemon", "delay_ms"),
+            path=config_path,
+        )
+    except (ValueError, configparser.Error) as e:
+        import sys
+        print(f"Warning: invalid config value ({e}), using defaults.", file=sys.stderr)
+        return _Config(steps=25, padding=0, delay_ms=250, path=config_path)
 
 
 def _write_config(config_path, active_config):
