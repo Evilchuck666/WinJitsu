@@ -1,5 +1,5 @@
 from .config import cfg
-from .screen import get_screens, get_screen_for_window
+from .screen import get_screens, get_screen_for_window, find_screen_for_window
 from .window import get_window_position, get_wm_class, move_window
 from .cache import load_state, save_state, clear_cache, _update_state
 
@@ -94,6 +94,8 @@ def toggle_fullscreen(window=None):
     is_already_fullscreen = (
         window["WIDTH"] == fullscreen_width
         and window["HEIGHT"] == fullscreen_height
+        and window["X"] == screen_origin_x + padding
+        and window["Y"] == screen_origin_y + padding
     )
 
     if is_already_fullscreen:
@@ -110,29 +112,18 @@ def toggle_display():
         return
 
     all_screens = [primary_screen] + other_screens
-    window_center_x = window["X"] + window["WIDTH"] / 2
-    window_center_y = window["Y"] + window["HEIGHT"] / 2
-
-    def _distance_to_screen_center(screen):
-        screen_center_x = screen["x"] + screen["width"] / 2
-        screen_center_y = screen["y"] + screen["height"] / 2
-        return (window_center_x - screen_center_x) ** 2 + (window_center_y - screen_center_y) ** 2
-
-    def _contains_window_center(screen):
-        return (screen["x"] <= window_center_x < screen["x"] + screen["width"]
-                and screen["y"] <= window_center_y < screen["y"] + screen["height"])
-
-    current_screen = next(
-        (screen for screen in all_screens if _contains_window_center(screen)),
-        min(all_screens, key=_distance_to_screen_center),
-    )
+    current_screen = find_screen_for_window(window)
     current_screen_index = all_screens.index(current_screen)
     target_screen_index = (current_screen_index + 1) % len(all_screens)
     target_screen = all_screens[target_screen_index]
 
-    # Preserve the window's relative offset on the new screen
+    # Preserve the window's relative offset on the new screen, clamped to its bounds
     target_x = target_screen["x"] + (window["X"] - current_screen["x"])
     target_y = target_screen["y"] + (window["Y"] - current_screen["y"])
+    target_x = max(target_screen["x"],
+                   min(target_x, target_screen["x"] + target_screen["width"]  - window["WIDTH"]))
+    target_y = max(target_screen["y"],
+                   min(target_y, target_screen["y"] + target_screen["height"] - window["HEIGHT"]))
 
     window_id = window["WINDOW"]
     wm_class = get_wm_class(window_id)

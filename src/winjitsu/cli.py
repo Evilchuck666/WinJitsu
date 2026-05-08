@@ -46,7 +46,11 @@ def main():
     pre_parser.add_argument("--read-config", metavar="PATH")
     pre_parsed_args, _ = pre_parser.parse_known_args()
     if pre_parsed_args.read_config:
-        _config_module.cfg = _load_config(Path(pre_parsed_args.read_config))
+        new_cfg = _load_config(Path(pre_parsed_args.read_config))
+        _config_module.cfg.steps    = new_cfg.steps
+        _config_module.cfg.padding  = new_cfg.padding
+        _config_module.cfg.delay_ms = new_cfg.delay_ms
+        _config_module.cfg.path     = new_cfg.path
 
     parser = argparse.ArgumentParser(
         description="Animated window management tool for Linux X11.",

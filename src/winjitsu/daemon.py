@@ -19,11 +19,12 @@ PID_PATH     = _RUNTIME_DIR / "winjitsu.pid"
 
 
 class _Pending:
-    __slots__ = ("action", "event", "result")
+    __slots__ = ("action", "event", "result", "cancelled")
     def __init__(self, action):
-        self.action = action
-        self.event  = threading.Event()
-        self.result = []  # populated with one string before event is set
+        self.action    = action
+        self.event     = threading.Event()
+        self.result    = []  # populated with one string before event is set
+        self.cancelled = False
 
 
 _current_pending: "_Pending | None" = None
@@ -55,7 +56,7 @@ def _run_action():
         pending = _current_pending
         _current_pending = None
         _pending_timer = None
-    if pending is None:
+    if pending is None or pending.cancelled:
         return
     try:
         result = dispatch(pending.action)
@@ -74,9 +75,11 @@ class _CommandHandler(socketserver.StreamRequestHandler):
             self.wfile.write(b"ERROR: invalid action\n")
             return
         pending = _schedule_action(received_action)
-        pending.event.wait(timeout=10.0)
-        response = pending.result[0] if pending.result else "ERROR: timeout"
-        self.wfile.write(f"{response}\n".encode())
+        if not pending.event.wait(timeout=10.0):
+            pending.cancelled = True
+            self.wfile.write(b"ERROR: timeout\n")
+            return
+        self.wfile.write(f"{pending.result[0]}\n".encode())
 
 
 def _cleanup_stale_runtime():
@@ -104,7 +107,6 @@ def run_daemon():
     _cleanup_stale_runtime()
     PID_PATH.write_text(str(os.getpid()))
     init_db()
-    clear_cache()
 
     # noinspection PyTypeChecker
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)

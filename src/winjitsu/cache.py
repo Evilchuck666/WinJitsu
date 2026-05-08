@@ -33,6 +33,9 @@ def init_db():
 
 
 def load_state(window_id, wm_class):
+    if wm_class is None:
+        return None
+    window_id = str(window_id)
     if not DB_PATH.exists():
         return None
     with sqlite3.connect(DB_PATH) as conn:
@@ -55,6 +58,10 @@ def load_state(window_id, wm_class):
 
 
 def save_state(window_id, home_state, target_x, target_y, target_width, target_height, wm_class):
+    if wm_class is None:
+        return
+    window_id  = str(window_id)
+    home_state = {**home_state, "WINDOW": str(home_state["WINDOW"])}
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -99,6 +106,8 @@ def _resolve_home(window, cached_state):
 
 
 def _update_state(window, target_x, target_y, target_width, target_height):
+    target_x, target_y = int(round(target_x)), int(round(target_y))
+    target_width, target_height = int(round(target_width)), int(round(target_height))
     wm_class = get_wm_class(window["WINDOW"])
 
     if wm_class is None:

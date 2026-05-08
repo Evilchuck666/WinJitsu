@@ -45,30 +45,31 @@ def get_screens():
     return primary, others
 
 
-def get_screen_for_window(window):
+def find_screen_for_window(window) -> dict:
+    """Return the screen dict that contains the window center."""
     primary, others = get_screens()
     if not primary:
-        default_screen = _get_display().screen()
-        return default_screen.width_in_pixels, default_screen.height_in_pixels, 0, 0
+        s = _get_display().screen()
+        return {"x": 0, "y": 0, "width": s.width_in_pixels, "height": s.height_in_pixels}
 
     all_screens     = [primary] + others
     window_center_x = window["X"] + window["WIDTH"] / 2
     window_center_y = window["Y"] + window["HEIGHT"] / 2
 
-    def _dist(screen_candidate):
-        screen_center_x = screen_candidate["x"] + screen_candidate["width"] / 2
-        screen_center_y = screen_candidate["y"] + screen_candidate["height"] / 2
-        x_distance = window_center_x - screen_center_x
-        y_distance = window_center_y - screen_center_y
-        return x_distance ** 2 + y_distance ** 2
+    def _contains(s):
+        return (s["x"] <= window_center_x < s["x"] + s["width"]
+                and s["y"] <= window_center_y < s["y"] + s["height"])
+
+    def _dist(s):
+        return (window_center_x - (s["x"] + s["width"]  / 2)) ** 2 \
+             + (window_center_y - (s["y"] + s["height"] / 2)) ** 2
 
     # Use the screen whose bounds contain the window center. If the center falls
     # outside all screens (e.g., a window is mostly off-screen), fall back to the
     # nearest screen by distance from its center.
-    screen = next(
-        (screen_candidate for screen_candidate in all_screens
-         if screen_candidate["x"] <= window_center_x < screen_candidate["x"] + screen_candidate["width"]
-         and screen_candidate["y"] <= window_center_y < screen_candidate["y"] + screen_candidate["height"]),
-        min(all_screens, key=_dist),
-    )
-    return screen["width"], screen["height"], screen["x"], screen["y"]
+    return next((s for s in all_screens if _contains(s)), min(all_screens, key=_dist))
+
+
+def get_screen_for_window(window):
+    s = find_screen_for_window(window)
+    return s["width"], s["height"], s["x"], s["y"]
