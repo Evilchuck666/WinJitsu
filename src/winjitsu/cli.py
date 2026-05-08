@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from .config import _load_config, _write_config
-from .actions import dispatch, VALID_ACTIONS
+from .actions import VALID_ACTIONS
 from .daemon import _fork_daemon, send_command, PID_PATH
 
 
@@ -56,7 +56,7 @@ def main():
     parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION",
                         help="window management action (see below)")
     parser.add_argument("--daemon",         action="store_true",    help="start background daemon")
-    parser.add_argument("--reload-daemon",  action="store_true",    help="restart the background daemon (preserves cache)")
+    parser.add_argument("--reload-daemon",  action="store_true",    help="restart the background daemon")
     parser.add_argument("--write-config",   action="store_true",    help="create config file with defaults and exit")
     parser.add_argument("--read-config",    metavar="PATH",         help="use a custom config file path")
     parser.add_argument("--see-config",     action="store_true",    help="print current config values and exit")
@@ -119,9 +119,6 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    try:
-        if not send_command(parsed_args.action):
-            dispatch(parsed_args.action)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    if not send_command(parsed_args.action):
+        print("Error: WinJitsu daemon is not running. Start it with: winjitsu --daemon", file=sys.stderr)
         sys.exit(1)
