@@ -6,24 +6,6 @@ from pathlib import Path
 
 _CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "winjitsu" / "config.ini"
 
-_CONFIG_TEMPLATE = """\
-# WinJitsu configuration
-
-[animation]
-# Steps in the window movement animation.
-# Higher = smoother but slower. Default: 25
-# steps = 25
-
-[display]
-# Gap in pixels around the window when using F (fullscreen).
-# 0 = true fullscreen, 5 = small gap on all sides. Default: 0
-# padding = 0
-
-[daemon]
-# Delay in milliseconds. Rapid actions within this window are
-# collapsed into one — only the last one fires. Default: 250
-# delay_ms = 250
-"""
 
 
 @dataclass
@@ -51,14 +33,32 @@ def _load_config(path=None):
     )
 
 
-def _write_config(config_path):
+def _write_config(config_path, active_config):
     if config_path.exists():
         overwrite_response = input(f"Config already exists: {config_path}\nOverwrite? [y/N] ").strip().lower()
         if overwrite_response not in ("y", "yes"):
             print("Aborted.")
             return
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(_CONFIG_TEMPLATE)
+    content = f"""\
+# WinJitsu configuration
+
+[animation]
+# Steps in the window movement animation.
+# Higher = smoother but slower. Default: 25
+steps = {active_config.steps}
+
+[display]
+# Gap in pixels around the window when using F (fullscreen).
+# 0 = true fullscreen, 5 = small gap on all sides. Default: 0
+padding = {active_config.padding}
+
+[daemon]
+# Delay in milliseconds. Rapid actions within this window are
+# collapsed into one — only the last one fires. Default: 250
+delay_ms = {active_config.delay_ms}
+"""
+    config_path.write_text(content)
     print(f"Config written to: {config_path}")
 
 
