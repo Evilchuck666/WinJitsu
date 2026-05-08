@@ -50,8 +50,10 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
         interp_height  = current_h + (target_height - current_h) * ease_factor
         interp_x       = current_x + (target_x - current_x) * ease_factor
         interp_y       = current_y + (target_y - current_y) * ease_factor
-        subprocess.run([
+        result = subprocess.run([
             "xdotool",
             "windowsize", window_id_str, str(round(interp_width)), str(round(interp_height)),
             "windowmove", window_id_str, str(round(interp_x)),     str(round(interp_y)),
         ])
+        if result.returncode != 0:
+            break
