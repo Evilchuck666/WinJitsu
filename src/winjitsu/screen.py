@@ -61,6 +61,9 @@ def get_screen_for_window(window):
         y_distance = window_center_y - screen_center_y
         return x_distance ** 2 + y_distance ** 2
 
+    # Use the screen whose bounds contain the window center. If the center falls
+    # outside all screens (e.g. window is mostly off-screen), fall back to the
+    # nearest screen by distance from its center.
     screen = next(
         (screen_candidate for screen_candidate in all_screens
          if screen_candidate["x"] <= window_center_x < screen_candidate["x"] + screen_candidate["width"]
