@@ -115,12 +115,12 @@ def send_command(action):
     if not SOCKET_PATH.exists():
         return False
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(2.0)
-            s.connect(str(SOCKET_PATH))
-            s.sendall(f"{action}\n".encode())
-            with s.makefile("r") as f:
-                response = f.readline().strip()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as unix_socket:
+            unix_socket.settimeout(2.0)
+            unix_socket.connect(str(SOCKET_PATH))
+            unix_socket.sendall(f"{action}\n".encode())
+            with unix_socket.makefile("r") as response_reader:
+                response = response_reader.readline().strip()
         return response == "OK"
     except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
         return False
