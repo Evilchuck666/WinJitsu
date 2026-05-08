@@ -40,7 +40,7 @@ config file: ~/.config/winjitsu/config.ini  (XDG_CONFIG_HOME honoured)
 def main():
     import winjitsu.config as _config_module
 
-    # Pre-parse --read-config before the main parser so globals are updated
+    # Pre-parse --read-config before the main parser, so globals are updated
     # before any action uses them.
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--read-config", metavar="PATH")
@@ -112,7 +112,7 @@ def main():
             # loop completed without break — daemon did not stop in time
             print("Daemon did not stop within 5 seconds.", file=sys.stderr)
             sys.exit(1)
-        _fork_daemon(clear_cache_on_stop=False)
+        _fork_daemon()
         return
 
     if parsed_args.action is None:

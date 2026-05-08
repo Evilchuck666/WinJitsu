@@ -7,7 +7,7 @@ import threading
 
 from .config import _CFG
 from .actions import dispatch, VALID_ACTIONS
-from .cache import clear_cache
+from .cache import init_db, clear_cache
 
 
 _XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME", str(os.path.join(os.path.expanduser("~"), ".local", "share")))
@@ -73,10 +73,12 @@ def _cleanup_runtime_files():
     PID_PATH.unlink(missing_ok=True)
 
 
-def run_daemon(clear_cache_on_stop=True):
+def run_daemon():
     _RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     _cleanup_stale_runtime()
     PID_PATH.write_text(str(os.getpid()))
+    init_db()
+    clear_cache()
 
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
     stop_event    = threading.Event()
@@ -90,16 +92,12 @@ def run_daemon(clear_cache_on_stop=True):
     threading.Thread(target=socket_server.serve_forever, daemon=True).start()
     stop_event.wait()
 
-    try:
-        if clear_cache_on_stop:
-            clear_cache()
-    finally:
-        socket_server.shutdown()
-        socket_server.server_close()
-        _cleanup_runtime_files()
+    socket_server.shutdown()
+    socket_server.server_close()
+    _cleanup_runtime_files()
 
 
-def _fork_daemon(clear_cache_on_stop=True):
+def _fork_daemon():
     _cleanup_stale_runtime()
     child_pid = os.fork()
     if child_pid > 0:
@@ -111,7 +109,7 @@ def _fork_daemon(clear_cache_on_stop=True):
     for fd in (0, 1, 2):
         os.dup2(devnull_file.fileno(), fd)
     devnull_file.close()
-    run_daemon(clear_cache_on_stop)
+    run_daemon()
 
 
 def send_command(action):
