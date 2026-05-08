@@ -49,20 +49,20 @@ def find_screen_for_window(window) -> dict:
     """Return the screen dict that contains the window center."""
     primary, others = get_screens()
     if not primary:
-        s = _get_display().screen()
-        return {"x": 0, "y": 0, "width": s.width_in_pixels, "height": s.height_in_pixels}
+        screen = _get_display().screen()
+        return {"x": 0, "y": 0, "width": screen.width_in_pixels, "height": screen.height_in_pixels}
 
     all_screens     = [primary] + others
     window_center_x = window["X"] + window["WIDTH"] / 2
     window_center_y = window["Y"] + window["HEIGHT"] / 2
 
-    def _contains(s):
-        return (s["x"] <= window_center_x < s["x"] + s["width"]
-                and s["y"] <= window_center_y < s["y"] + s["height"])
+    def _contains(scr):
+        return (scr["x"] <= window_center_x < scr["x"] + scr["width"]
+                and scr["y"] <= window_center_y < scr["y"] + scr["height"])
 
-    def _dist(s):
-        return (window_center_x - (s["x"] + s["width"]  / 2)) ** 2 \
-             + (window_center_y - (s["y"] + s["height"] / 2)) ** 2
+    def _dist(scr):
+        return (window_center_x - (scr["x"] + scr["width"] / 2)) ** 2 \
+             + (window_center_y - (scr["y"] + scr["height"] / 2)) ** 2
 
     # Use the screen whose bounds contain the window center. If the center falls
     # outside all screens (e.g., a window is mostly off-screen), fall back to the
