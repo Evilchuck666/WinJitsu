@@ -7,14 +7,6 @@ from .cache import load_state, save_state, clear_cache, _update_state
 VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
 DIRECTION_ACTIONS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"}
 
-_ACTION_HANDLERS = {
-    "F":  fullscreen,
-    "U":  restore,
-    "TF": toggle_fullscreen,
-    "TD": toggle_display,
-    "CC": clear_cache,
-}
-
 
 # --- Grid snapping ---
 def direction(direction_code):
@@ -160,6 +152,14 @@ def toggle_display():
 
 
 # --- Dispatcher ---
+_ACTION_HANDLERS = {
+    "F":  fullscreen,
+    "U":  restore,
+    "TF": toggle_fullscreen,
+    "TD": toggle_display,
+    "CC": clear_cache,
+}
+
 def dispatch(action_code):
     if action_code in DIRECTION_ACTIONS:
         direction(action_code)
