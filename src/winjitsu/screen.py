@@ -55,8 +55,11 @@ def get_screen_for_window(window):
     window_center_y = window["Y"] + window["HEIGHT"] / 2
 
     def _dist(screen_candidate):
-        return (window_center_x - (screen_candidate["x"] + screen_candidate["width"] / 2)) ** 2 + \
-               (window_center_y - (screen_candidate["y"] + screen_candidate["height"] / 2)) ** 2
+        screen_center_x = screen_candidate["x"] + screen_candidate["width"] / 2
+        screen_center_y = screen_candidate["y"] + screen_candidate["height"] / 2
+        x_distance = window_center_x - screen_center_x
+        y_distance = window_center_y - screen_center_y
+        return x_distance ** 2 + y_distance ** 2
 
     screen = next(
         (screen_candidate for screen_candidate in all_screens
