@@ -44,22 +44,24 @@ def get_screens():
     return primary, others
 
 
-def get_screen_for_window(win):
+def get_screen_for_window(window):
     primary, others = get_screens()
     if not primary:
-        d = _get_display().screen()
-        return d.width_in_pixels, d.height_in_pixels, 0, 0
+        default_screen = _get_display().screen()
+        return default_screen.width_in_pixels, default_screen.height_in_pixels, 0, 0
 
-    all_screens = [primary] + others
-    win_cx = win["X"] + win["WIDTH"] / 2
-    win_cy = win["Y"] + win["HEIGHT"] / 2
+    all_screens     = [primary] + others
+    window_center_x = window["X"] + window["WIDTH"] / 2
+    window_center_y = window["Y"] + window["HEIGHT"] / 2
 
-    def _dist(s):
-        return (win_cx - (s["x"] + s["width"] / 2)) ** 2 + (win_cy - (s["y"] + s["height"] / 2)) ** 2
+    def _dist(screen_candidate):
+        return (window_center_x - (screen_candidate["x"] + screen_candidate["width"] / 2)) ** 2 + \
+               (window_center_y - (screen_candidate["y"] + screen_candidate["height"] / 2)) ** 2
 
     screen = next(
-        (s for s in all_screens
-         if s["x"] <= win_cx < s["x"] + s["width"] and s["y"] <= win_cy < s["y"] + s["height"]),
+        (screen_candidate for screen_candidate in all_screens
+         if screen_candidate["x"] <= window_center_x < screen_candidate["x"] + screen_candidate["width"]
+         and screen_candidate["y"] <= window_center_y < screen_candidate["y"] + screen_candidate["height"]),
         min(all_screens, key=_dist),
     )
     return screen["width"], screen["height"], screen["x"], screen["y"]
