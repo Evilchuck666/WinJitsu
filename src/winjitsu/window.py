@@ -26,26 +26,26 @@ def get_wm_class(window_id):
         return None
 
 
-def move_window(target_w, target_h, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
+def move_window(target_width, target_height, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
     def _ease(t):
         return t * t * (3.0 - 2.0 * t)
 
-    screen = _get_display().screen()
-    dw, dh = screen.width_in_pixels, screen.height_in_pixels
-    target_w = min(target_w, dw)
-    target_h = min(target_h, dh)
-    target_x = max(0, min(target_x, dw - target_w))
-    target_y = max(0, min(target_y, dh - target_h))
+    display_screen = _get_display().screen()
+    display_width, display_height = display_screen.width_in_pixels, display_screen.height_in_pixels
+    target_width  = min(target_width,  display_width)
+    target_height = min(target_height, display_height)
+    target_x = max(0, min(target_x, display_width  - target_width))
+    target_y = max(0, min(target_y, display_height - target_height))
 
-    wid = str(window_id)
-    for i in range(1, _CFG.steps + 1):
-        t = _ease(i / _CFG.steps)
-        w = current_w + (target_w - current_w) * t
-        h = current_h + (target_h - current_h) * t
-        x = current_x + (target_x - current_x) * t
-        y = current_y + (target_y - current_y) * t
+    window_id_str = str(window_id)
+    for step in range(1, _CFG.steps + 1):
+        ease_factor    = _ease(step / _CFG.steps)
+        interp_width   = current_w + (target_width  - current_w) * ease_factor
+        interp_height  = current_h + (target_height - current_h) * ease_factor
+        interp_x       = current_x + (target_x - current_x) * ease_factor
+        interp_y       = current_y + (target_y - current_y) * ease_factor
         subprocess.run([
             "xdotool",
-            "windowsize", wid, str(round(w)), str(round(h)),
-            "windowmove", wid, str(round(x)), str(round(y)),
+            "windowsize", window_id_str, str(round(interp_width)), str(round(interp_height)),
+            "windowmove", window_id_str, str(round(interp_x)),     str(round(interp_y)),
         ])
