@@ -6,13 +6,13 @@ from .screen import _get_display
 
 def get_window_position():
     try:
-        wid = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
-        out = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", wid]).decode()
-        data = {}
-        for line in out.splitlines():
-            k, v = line.split("=", 1)
-            data[k] = int(v)
-        return data
+        window_id       = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
+        geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", window_id]).decode()
+        window_geometry = {}
+        for line in geometry_output.splitlines():
+            key, value = line.split("=", 1)
+            window_geometry[key] = int(value)
+        return window_geometry
     except subprocess.CalledProcessError:
         raise RuntimeError("Could not get window position. Is xdotool installed?")
 
