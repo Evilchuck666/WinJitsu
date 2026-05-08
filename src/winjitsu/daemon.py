@@ -23,6 +23,8 @@ _pending_lock  = threading.Lock()
 
 
 def _schedule_action(action):
+    # Debounce: cancel any pending action and restart the timer. Only the last
+    # action in a rapid burst fires, preventing duplicate moves from key repeat.
     global _pending_timer
     with _pending_lock:
         if _pending_timer is not None:
@@ -103,7 +105,8 @@ def _fork_daemon(clear_cache_on_stop=True):
     if child_pid > 0:
         print(f"winjitsu daemon starting (PID {child_pid})")
         sys.exit(0)
-    os.setsid()
+    os.setsid()  # detach from the controlling terminal; become session leader
+    # Redirect stdin/stdout/stderr to /dev/null — daemon must not touch the terminal
     devnull_file = open(os.devnull, "r+")
     for fd in (0, 1, 2):
         os.dup2(devnull_file.fileno(), fd)

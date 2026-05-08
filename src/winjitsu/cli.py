@@ -94,13 +94,14 @@ def main():
         except PermissionError:
             print("Permission denied sending SIGTERM.", file=sys.stderr)
             sys.exit(1)
-        for _ in range(50):
+        for _ in range(50):  # poll up to 5 s (50 × 0.1 s)
             try:
-                os.kill(old_pid, 0)
+                os.kill(old_pid, 0)  # signal 0: liveness check, no signal sent
                 time.sleep(0.1)
             except ProcessLookupError:
                 break
         else:
+            # loop completed without break — daemon did not stop in time
             print("Daemon did not stop within 5 seconds.", file=sys.stderr)
             sys.exit(1)
         _fork_daemon(clear_cache_on_stop=False)

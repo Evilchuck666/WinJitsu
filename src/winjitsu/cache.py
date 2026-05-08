@@ -17,6 +17,7 @@ def load_state(window_id, wm_class):
             cached_state = json.load(f)
     except (json.JSONDecodeError, ValueError):
         return None
+    # X11 window IDs are recycled across sessions — reject cache if the app changed
     if cached_state.get("WM_CLASS") != wm_class:
         return None
     return cached_state
@@ -37,6 +38,9 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
 
 
 def _resolve_home(window, cached_state):
+    # If the window is still at the last position we animated it to, the original
+    # home hasn't changed — reuse it. Otherwise the window moved elsewhere and its
+    # current position becomes the new home.
     if cached_state is None:
         return window
     last_target_geometry = (

@@ -28,12 +28,14 @@ def get_wm_class(window_id):
 
 def move_window(target_width, target_height, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
     def _ease(t):
+        # smoothstep: eases in and out, producing natural-feeling animation
         return t * t * (3.0 - 2.0 * t)
 
     display_screen = _get_display().screen()
     display_width, display_height = display_screen.width_in_pixels, display_screen.height_in_pixels
     target_width  = min(target_width,  display_width)
     target_height = min(target_height, display_height)
+    # Clamp to display bounds so the window never moves off-screen
     target_x = max(0, min(target_x, display_width  - target_width))
     target_y = max(0, min(target_y, display_height - target_height))
 

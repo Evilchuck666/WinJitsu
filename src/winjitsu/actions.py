@@ -137,6 +137,7 @@ def toggle_display():
     target_screen_index = (current_screen_index + 1) % len(all_screens)
     target_screen = all_screens[target_screen_index]
 
+    # Preserve the window's relative offset on the new screen
     target_x = target_screen["x"] + (window["X"] - current_screen["x"])
     target_y = target_screen["y"] + (window["Y"] - current_screen["y"])
 
