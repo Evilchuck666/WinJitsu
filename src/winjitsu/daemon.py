@@ -6,7 +6,7 @@ import signal
 import threading
 from .config  import cfg
 from .actions import dispatch, VALID_ACTIONS
-from .cache   import init_db
+from .cache   import init_db, clear_cache
 from pathlib  import Path
 
 
@@ -118,6 +118,7 @@ def run_daemon():
     _cleanup_stale_runtime()
     PID_PATH.write_text(str(os.getpid()))
     init_db()
+    clear_cache()
 
     # noinspection PyTypeChecker
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
