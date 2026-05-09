@@ -17,9 +17,10 @@ PID_PATH       = _RUNTIME_DIR / "winjitsu.pid"
 
 
 class _Pending:
-    __slots__ = ("action", "event", "result", "cancelled")
-    def __init__(self, action):
+    __slots__ = ("action", "overrides", "event", "result", "cancelled")
+    def __init__(self, action, overrides):
         self.action    = action
+        self.overrides = overrides
         self.event     = threading.Event()
         self.result    = []  # populated with one string before event is set
         self.cancelled = False
@@ -30,12 +31,12 @@ _pending_timer:   "threading.Timer | None" = None
 _pending_lock = threading.Lock()
 
 
-def _schedule_action(action) -> _Pending:
+def _schedule_action(action, overrides) -> _Pending:
     # Delay: cancel the previous timer and supersede its waiter with "OK".
     # Only the last action in a rapid burst actually executes.
     global _current_pending, _pending_timer
 
-    pending = _Pending(action)
+    pending = _Pending(action, overrides)
 
     with _pending_lock:
         if _pending_timer is not None:
@@ -64,11 +65,19 @@ def _run_action():
     if pending is None or pending.cancelled:
         return
 
+    saved = {k: getattr(cfg, k) for k in pending.overrides}
+    for k, v in pending.overrides.items():
+        setattr(cfg, k, v)
+
     try:
         result = dispatch(pending.action)
         pending.result.append(result if result else "OK")
     except Exception as e:
         pending.result.append(f"ERROR: {e}")
+    finally:
+        for k, v in saved.items():
+            setattr(cfg, k, v)
+
     pending.event.set()
 
 
@@ -76,13 +85,26 @@ class _CommandHandler(socketserver.StreamRequestHandler):
     timeout = 15
 
     def handle(self):
-        received_action = self.rfile.readline(256).decode().strip()
+        parts  = self.rfile.readline(256).decode().strip().split()
+        action = parts[0] if parts else ""
 
-        if not received_action or received_action not in VALID_ACTIONS:
+        if not action or action not in VALID_ACTIONS:
             self.wfile.write(b"ERROR: invalid action\n")
             return
 
-        pending = _schedule_action(received_action)
+        _OVERRIDE_KEYS = {"steps", "padding", "delay_ms"}
+        overrides = {}
+
+        for token in parts[1:]:
+            k, _, v = token.partition("=")
+
+            if k in _OVERRIDE_KEYS and v:
+                try:
+                    overrides[k] = int(v)
+                except ValueError:
+                    pass
+
+        pending = _schedule_action(action, overrides)
 
         if not pending.event.wait(timeout=10.0):
             pending.cancelled = True
@@ -159,14 +181,19 @@ def _fork_daemon():
     run_daemon()
 
 
-def send_command(action):
+def send_command(action, overrides=None):
     if not SOCKET_PATH.exists():
         return False
+
     try:
+        parts = [action]
+        if overrides:
+            parts += [f"{k}={v}" for k, v in overrides.items()]
+            
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as unix_socket:
             unix_socket.settimeout(10.0)
             unix_socket.connect(str(SOCKET_PATH))
-            unix_socket.sendall(f"{action}\n".encode())
+            unix_socket.sendall((" ".join(parts) + "\n").encode())
 
             with unix_socket.makefile("r") as response_reader:
                 response = response_reader.readline().strip()
