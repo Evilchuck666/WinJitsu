@@ -144,6 +144,7 @@ def run_daemon():
 
     # noinspection PyTypeChecker
     socket_server = socketserver.ThreadingUnixStreamServer(str(SOCKET_PATH), _CommandHandler)
+    os.chmod(SOCKET_PATH, 0o600)
     stop_event    = threading.Event()
 
     def _on_signal(_signum, _frame):
