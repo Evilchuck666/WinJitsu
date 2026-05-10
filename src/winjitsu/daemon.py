@@ -10,8 +10,8 @@ from .cache   import init_db, clear_cache
 from pathlib  import Path
 
 
-_XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME", str(os.path.join(os.path.expanduser("~"), ".local", "share")))
-_RUNTIME_DIR   = Path(_XDG_DATA_HOME) / "winjitsu"
+_XDG_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+_RUNTIME_DIR     = Path(_XDG_RUNTIME_DIR) / "winjitsu"
 SOCKET_PATH    = _RUNTIME_DIR / "winjitsu.sock"
 PID_PATH       = _RUNTIME_DIR / "winjitsu.pid"
 
