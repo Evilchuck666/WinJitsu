@@ -130,16 +130,6 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    overrides = {}
-    if parsed_args.steps    is not None:
-        overrides["steps"]    = parsed_args.steps
-
-    if parsed_args.padding  is not None:
-        overrides["padding"]  = parsed_args.padding
-
-    if parsed_args.delay_ms is not None:
-        overrides["delay_ms"] = parsed_args.delay_ms
-
-    if not send_command(parsed_args.action, overrides):
+    if not send_command(parsed_args.action):
         print("Error: WinJitsu daemon is not running. Start it with: winjitsu --daemon", file=sys.stderr)
         sys.exit(1)
