@@ -28,7 +28,8 @@ class _Pending:
 
 _current_pending: "_Pending | None" = None
 _pending_timer:   "threading.Timer | None" = None
-_pending_lock = threading.Lock()
+_pending_lock  = threading.Lock()
+_OVERRIDE_KEYS = {"steps", "padding", "delay_ms"}
 
 
 def _schedule_action(action, overrides) -> _Pending:
@@ -92,7 +93,6 @@ class _CommandHandler(socketserver.StreamRequestHandler):
             self.wfile.write(b"ERROR: invalid action\n")
             return
 
-        _OVERRIDE_KEYS = {"steps", "padding", "delay_ms"}
         overrides = {}
 
         for token in parts[1:]:
