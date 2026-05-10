@@ -116,7 +116,7 @@ def toggle_display():
 
     all_screens = [primary_screen] + other_screens
 
-    current_screen       = find_screen_for_window(window)
+    current_screen       = find_screen_for_window(window, (primary_screen, other_screens))
     current_screen_index = all_screens.index(current_screen)
 
     target_screen_index = (current_screen_index + 1) % len(all_screens)

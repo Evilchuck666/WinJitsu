@@ -56,9 +56,12 @@ def get_screens():
     return primary, others
 
 
-def find_screen_for_window(window) -> dict:
+def find_screen_for_window(window, screens=None) -> dict:
     """Return the screen dict that contains the window center."""
-    primary, others = get_screens()
+    if screens is None:
+        primary, others = get_screens()
+    else:
+        primary, others = screens
 
     if not primary:
         screen = _get_display().screen()
