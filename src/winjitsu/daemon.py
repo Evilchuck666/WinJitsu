@@ -37,7 +37,8 @@ def _schedule_action(action, overrides) -> _Pending:
     # Only the last action in a rapid burst actually executes.
     global _current_pending, _pending_timer
 
-    pending = _Pending(action, overrides)
+    delay_ms = overrides.pop("delay_ms", cfg.delay_ms)
+    pending  = _Pending(action, overrides)
 
     with _pending_lock:
         if _pending_timer is not None:
@@ -48,7 +49,7 @@ def _schedule_action(action, overrides) -> _Pending:
             _current_pending.event.set()
 
         _current_pending = pending
-        new_timer        = threading.Timer(cfg.delay_ms / 1000, _run_action)
+        new_timer        = threading.Timer(delay_ms / 1000, _run_action)
         _pending_timer   = new_timer
 
         new_timer.start()
