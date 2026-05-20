@@ -111,6 +111,9 @@ Run the command with an action argument to control the active window:
 winjitsu [ACTION] [OPTIONS]
 ```
 
+> ⚠️ **WinJitsu requires the daemon to be running.**
+> Start it once with `winjitsu --daemon` before using any action.
+
 ### Available Actions
 
 | Action | Description                            | Emoji |
@@ -172,7 +175,7 @@ Running WinJitsu as a background daemon makes hotkey responses feel instant and 
 
 ```bash
 winjitsu --daemon           # Start the daemon in the background
-winjitsu --reload-daemon    # Restart it without clearing the window cache 🔄
+winjitsu --reload-daemon    # Restart the daemon 🔄
 ```
 
 When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The daemon applies a short delay (configurable with `--delay-ms`) so rapid bursts of the same key collapse into a single, clean action. ✨
