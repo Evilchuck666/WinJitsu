@@ -18,7 +18,7 @@ on your screen with smooth animations, making your workflow feel more organic an
 -   **Fullscreen Toggling**: Smart fullscreen with configurable padding and restore capabilities. ↔️
 -   **Background Daemon**: Run as a daemon for instant, delayed responses to hotkeys. ⚡
 -   **Config File**: Persist your preferences in `~/.config/winjitsu/config.ini`. ⚙️
--   **CLI Overrides**: Override any config value on the fly with flags — no file editing needed. 🎛️
+-   **CLI Overrides**: Override config values when starting the daemon — no file editing needed. 🎛️
 
 
 ---
@@ -82,7 +82,7 @@ This allows you to run `winjitsu` from anywhere.
 
 3.  **Install the wheel**:
     ```bash
-    pip install dist/winjitsu-0.2.0-py3-none-any.whl --force-reinstall
+    pip install dist/winjitsu-0.3.0-py3-none-any.whl --force-reinstall
     ```
 
 4.  **Run WinJitsu**:
@@ -161,8 +161,8 @@ winjitsu --read-config PATH # 📂 Use a different config file for this run
 ### Examples
 
 ```bash
-winjitsu N --steps 10                           # Super snappy animation 💨
-winjitsu F --padding 8                          # Fullscreen with a cozy gap 🖼️
+winjitsu --daemon --steps 10                    # Start daemon with snappy animation 💨
+winjitsu --daemon --padding 8                   # Start daemon with a cozy fullscreen gap 🖼️
 winjitsu --write-config --steps 15 --padding 4  # Save these as your defaults 💾
 ```
 
