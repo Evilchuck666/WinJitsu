@@ -63,9 +63,9 @@ def main():
     parser.add_argument("--write-config",   action="store_true",                      help="create config file with defaults and exit")
     parser.add_argument("--read-config",    metavar="PATH",                           help="use a custom config file path")
     parser.add_argument("--see-config",     action="store_true",                      help="print current config values and exit")
-    parser.add_argument("--steps",          type=int, metavar="N",                    help="animation steps, overrides config (default: 25)")
-    parser.add_argument("--padding",        type=int, metavar="PX",                   help="fullscreen padding in pixels, overrides config (default: 0)")
-    parser.add_argument("--delay-ms",       type=int, metavar="MS",                   help="action delay in milliseconds, overrides config (default: 250)")
+    parser.add_argument("--steps",          type=int, metavar="N",                    help="animation steps for --daemon, overrides config (default: 25)")
+    parser.add_argument("--padding",        type=int, metavar="PX",                   help="fullscreen padding in pixels for --daemon, overrides config (default: 0)")
+    parser.add_argument("--delay-ms",       type=int, metavar="MS",                   help="debounce delay in milliseconds for --daemon, overrides config (default: 250)")
     parsed_args = parser.parse_args()
 
     config = _config_module.cfg
