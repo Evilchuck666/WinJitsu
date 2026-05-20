@@ -101,7 +101,7 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
 
 def _resolve_home(window, cached_state):
     # If the window is still at the last position we animated it to, the original
-    # home hasn't changed — reuse it. Otherwise, the window moved elsewhere and its
+    # home hasn't changed — reuse it. Otherwise, the window moved elsewhere, and its
     # current position becomes the new home.
     if cached_state is None:
         return window
