@@ -1,7 +1,11 @@
 # 🥋 WinJitsu
 
+![Platform](https://img.shields.io/badge/platform-GNU%2FLinux%20%28X11%29-blue)
 ![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
-![License](https://img.shields.io/badge/license-GPLv3-green)
+![Requires](https://img.shields.io/badge/requires-xdotool%2C%20python--xlib-blue)
+[![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Evilchuck666/WinJitsu?label=download&sort=semver)](https://github.com/Evilchuck666/WinJitsu/releases/latest)
+[![Build and tests](https://github.com/Evilchuck666/WinJitsu/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Evilchuck666/WinJitsu/actions/workflows/release.yml)
 
 **WinJitsu** is a slick, animated window management tool for Linux (X11).
 It allows you to effortlessly snap your active windows to various positions
