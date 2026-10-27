@@ -130,6 +130,11 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    if not send_command(parsed_args.action):
+    sent = send_command(parsed_args.action)
+
+    if sent is None:
         print("Error: WinJitsu daemon is not running. Start it with: winjitsu --daemon", file=sys.stderr)
+        sys.exit(1)
+
+    if not sent:
         sys.exit(1)

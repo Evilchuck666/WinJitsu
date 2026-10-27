@@ -162,8 +162,10 @@ def _fork_daemon():
 
 
 def send_command(action):
+    # True: done (warnings already printed). False: the daemon reported an error,
+    # already printed. None: the daemon could not be reached.
     if not SOCKET_PATH.exists():
-        return False
+        return None
 
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as unix_socket:
@@ -182,4 +184,4 @@ def send_command(action):
 
         return True
     except (FileNotFoundError, ConnectionRefusedError, TimeoutError, OSError):
-        return False
+        return None

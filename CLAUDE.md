@@ -59,7 +59,7 @@ winjitsu ACTION → cli.main → daemon.send_command ──Unix socket──▶ 
 **Gotchas:**
 - Use `config_timestamp`, not `timestamp`, for RandR output/CRTC queries; the latter causes `BadMatch` on some drivers (commented in `screen.py`).
 - The daemon reads `cfg` once at startup, so config or code changes need `winjitsu --reload-daemon`.
-- Actions that return a string starting with `WARN:` or `ERROR:` are printed by the client. On `ERROR:` `send_command()` returns `False`, so `cli.py` also prints "daemon is not running" and exits 1 even though the daemon is up.
+- Replies starting with `WARN:` or `ERROR:` are printed by the client. `send_command()` returns `True` on success, `False` when the daemon replied `ERROR:` (exit 1) and `None` when the daemon cannot be reached (exit 1 with the "daemon is not running" hint).
 
 ## Actions Reference
 
