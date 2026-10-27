@@ -15,8 +15,8 @@ on your screen with smooth animations, making your workflow feel more organic an
 -   **Smooth Animations**: Windows glide to their new positions instead of just jumping there. 🌬️
 -   **Grid Snapping**: Position windows easily to the North, South, East, West, corners, or center. 🧭
 -   **Multi-Monitor Support**: Move windows between displays with ease. 🖥️ ➡️ 🖥️
--   **Fullscreen Toggling**: Smart fullscreen with configurable padding and restore capabilities. ↔️
--   **Background Daemon**: Run as a daemon for instant, delayed responses to hotkeys. ⚡
+-   **Fullscreen Toggling**: Smart fullscreen with configurable padding, and restore to each window's home position. ↔️
+-   **Background Daemon**: A small daemon answers hotkeys instantly and collapses key-repeat bursts into one action. ⚡
 -   **Config File**: Persist your preferences in `~/.config/winjitsu/config.ini`. ⚙️
 -   **CLI Overrides**: Override config values when starting the daemon — no file editing needed. 🎛️
 
@@ -64,7 +64,15 @@ WinJitsu is available in the AUR. You can install it using your favorite AUR hel
 yay -S winjitsu
 ```
 
-### Building and Installing Wheel (Recommended)
+### 🐍 From PyPI
+
+```bash
+pip install WinJitsu
+```
+
+`xdotool` still has to come from your distribution (see Requirements above).
+
+### Building and Installing Wheel
 
 To install WinJitsu as a package, you can build a wheel and install it.
 This uses the standard `pyproject.toml` configuration to build the package.
@@ -82,7 +90,7 @@ This allows you to run `winjitsu` from anywhere.
 
 3.  **Install the wheel**:
     ```bash
-    pip install dist/winjitsu-0.3.0-py3-none-any.whl --force-reinstall
+    pip install dist/winjitsu-*-py3-none-any.whl --force-reinstall
     ```
 
 4.  **Run WinJitsu**:
@@ -95,8 +103,8 @@ This allows you to run `winjitsu` from anywhere.
 Clone the repository and install using `pip`:
 
 ```bash
-git clone https://github.com/Evilchuck666/winjitsu.git
-cd winjitsu
+git clone https://github.com/Evilchuck666/WinJitsu.git
+cd WinJitsu
 pip install .
 ```
 
@@ -126,12 +134,14 @@ winjitsu [ACTION] [OPTIONS]
 | `NW`   | Move to North-West                     | ↖️    |
 | `SE`   | Move to South-East                     | ↘️    |
 | `SW`   | Move to South-West                     | ↙️    |
-| `C`    | Center the window                      | 🎯    |
-| `F`    | Maximize / Fullscreen                  | 🖥️   |
-| `U`    | Unscreen (Restore original size/pos)   | 🔙    |
-| `TF`   | Toggle Fullscreen                      | 🔄    |
-| `TD`   | Toggle Display (Move to other monitor) | 📺    |
-| `CC`   | Clear Cache                            | 🧹    |
+| `C`    | Center the window (keeps its size)     | 🎯    |
+| `F`    | Fullscreen (minus `padding`)           | 🖥️   |
+| `U`    | Restore the window's home position     | 🔙    |
+| `TF`   | Toggle fullscreen / home position      | 🔄    |
+| `TD`   | Move to the next monitor               | 📺    |
+| `CC`   | Clear the window state cache           | 🧹    |
+
+The **home position** is where a window was before WinJitsu first moved it. It is kept per window in `~/.cache/winjitsu/state.db` and reset whenever the daemon starts or you move the window yourself.
 
 
 ---
@@ -178,7 +188,7 @@ winjitsu --daemon           # Start the daemon in the background
 winjitsu --reload-daemon    # Restart the daemon 🔄
 ```
 
-When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The daemon applies a short delay (configurable with `--delay-ms`) so rapid bursts of the same key collapse into a single, clean action. ✨
+When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The daemon waits a short delay (configurable with `--delay-ms`) and only runs the last action of a rapid burst, so key repeat collapses into a single, clean move. ✨
 
 > 💡 **Tip:** Start the daemon on login and bind your hotkeys to `winjitsu [ACTION]` — you'll barely notice the tool is even there.
 

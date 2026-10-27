@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "WinJitsu"
-version = "0.3.0"
-description = "A slick, animated window management tool for Linux (X11)"
+version = "0.4.0"
+description = "Animated window snapping for Linux X11: halves, quarters, center, fullscreen and multi-monitor moves from hotkeys, via a small background daemon"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-only"
@@ -13,8 +13,17 @@ license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: POSIX :: Linux",
+    "Environment :: X11 Applications",
+    "Topic :: Desktop Environment :: Window Managers",
 ]
+keywords = ["x11", "window-management", "window-snapping", "tiling", "xdotool", "multi-monitor", "daemon"]
 dependencies = ["python-xlib"]
+
+[project.urls]
+Homepage = "https://github.com/Evilchuck666/WinJitsu"
+Source = "https://github.com/Evilchuck666/WinJitsu"
+Issues = "https://github.com/Evilchuck666/WinJitsu/issues"
+Releases = "https://github.com/Evilchuck666/WinJitsu/releases"
 
 [project.scripts]
 winjitsu = "winjitsu:main"

@@ -1,11 +1,13 @@
-name: Build Python package
+name: Build and release
 
 # Disabled by default. Pushes and pull requests only build when the repository
 # variable WINJITSU_CI is set to "true" (Settings → Secrets and variables →
 # Actions → Variables); otherwise the run shows up as skipped and uses no
 # minutes. "Run workflow" always works: leave the version empty to just build,
-# or give one (e.g. 0.3.0, matching pyproject.toml) to also publish a GitHub
-# release with the wheel and the source distribution.
+# or give one (e.g. 0.4.0, matching pyproject.toml and arch/PKGBUILD) to also
+# publish a GitHub release with the wheel and the source distribution, upload
+# both to PyPI (Trusted Publishing, environment "pypi") and push arch/PKGBUILD
+# to the winjitsu AUR package (needs the AUR_SSH_PRIVATE_KEY secret).
 
 on:
   push:
@@ -15,12 +17,13 @@ on:
       - 'pyproject.toml'
       - 'README.md'
       - 'LICENSE'
-      - '.github/workflows/build.yml'
+      - 'arch/**'
+      - '.github/workflows/release.yml'
   pull_request:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release, without the v (e.g. 0.3.0). Leave empty to only build.'
+        description: 'Version to release, without the v (e.g. 0.4.0). Leave empty to only build.'
         required: false
         default: ''
         type: string
@@ -108,13 +111,19 @@ jobs:
           set -euo pipefail
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Use a version like 0.3.0, without the v."
+            echo "::error::Use a version like 0.4.0, without the v."
             exit 1
           fi
 
           code_version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
           if [[ "$code_version" != "$VERSION" ]]; then
             echo "::error::pyproject.toml says $code_version. Bump it to $VERSION first."
+            exit 1
+          fi
+
+          pkgbuild_version=$(sed -nE 's/^pkgver=(.*)/\1/p' arch/PKGBUILD)
+          if [[ "$pkgbuild_version" != "$VERSION" ]]; then
+            echo "::error::arch/PKGBUILD says $pkgbuild_version. Bump it to $VERSION first."
             exit 1
           fi
 
@@ -156,3 +165,87 @@ jobs:
             --title "WinJitsu v$VERSION" \
             --generate-notes \
             --latest
+
+  pypi:
+    name: Publish to PyPI
+    needs: release
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/WinJitsu/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: WinJitsu-dist
+          path: dist
+
+      # No API token: PyPI trusts this workflow file and environment directly.
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  aur:
+    name: Update AUR package
+    needs: release
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Check AUR key
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::error::Add the AUR_SSH_PRIVATE_KEY secret to update the AUR package."
+            exit 1
+          fi
+
+      - name: Set up SSH and git
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed git openssh
+          ssh_dir="$RUNNER_TEMP/aur-ssh"
+          install -dm700 "$ssh_dir"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh_dir/aur"
+          chmod 600 "$ssh_dir/aur"
+          # Pinned AUR host keys, see https://aur.archlinux.org
+          cat > "$ssh_dir/known_hosts" << 'EOF'
+          aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+          aur.archlinux.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLMiLrP8pVi5BFX2i3vepSUnpedeiewE5XptnUnau+ZoeUOPkpoCgZZuYfpaIQfhhJJI5qgnjJmr4hyJbe/zxow=
+          EOF
+          # Inside a container HOME is /github/home but ssh reads ~/.ssh from
+          # /etc/passwd (/root), so pass the key and host keys explicitly.
+          echo "GIT_SSH_COMMAND=ssh -i $ssh_dir/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+          git config --global user.name "Evilchuck666"
+          git config --global user.email "carlos.martinez.medina1992@gmail.com"
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          path: repo
+
+      # arch/PKGBUILD is the source of truth: copy it over the AUR one with
+      # pkgrel reset to 1 and regenerate .SRCINFO. makepkg refuses root.
+      - name: Push PKGBUILD to the AUR
+        run: |
+          set -euo pipefail
+          git clone ssh://aur@aur.archlinux.org/winjitsu.git aur
+          useradd -m builder
+          cp repo/arch/PKGBUILD aur/PKGBUILD
+          cd aur
+          sed -i -E "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          chown -R builder .
+          su builder -c 'makepkg --printsrcinfo' > .SRCINFO
+          git config --global --add safe.directory "$PWD"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR package is already at $VERSION."
+            exit 0
+          fi
+          git commit -m "Update to $VERSION"
+          git push origin master
