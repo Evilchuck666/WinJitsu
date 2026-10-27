@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "WinJitsu"
-version = "0.4.1"
+version = "0.4.2"
 description = "Animated window snapping for Linux X11: halves, quarters, center, fullscreen and multi-monitor moves from hotkeys, via a small background daemon"
 readme = "README.md"
 requires-python = ">=3.10"
