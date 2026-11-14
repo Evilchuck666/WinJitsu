@@ -6,3 +6,4 @@
 
 .download-label{display:flex;align-items:center;gap:.75rem;min-width:0}.os-icon{width:1.65rem;height:1.65rem;flex-shrink:0;color:var(--accent)}
 .downloads{list-style:none;padding:0;margin:2rem 0 1rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}.downloads li{min-width:0}.downloads .button{width:100%;height:100%;justify-content:space-between;text-align:left;gap:.6rem;padding:1rem;overflow-wrap:anywhere}.downloads small{display:block;color:var(--muted);font-size:.75rem;font-weight:400}@media(max-width:400px){.downloads{grid-template-columns:1fr}}
+.install{display:grid;gap:1.5rem;align-self:start;min-width:0}.install h3{margin-top:0}.install p{margin:0 0 .8rem}
