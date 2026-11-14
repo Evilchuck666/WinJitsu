@@ -7,6 +7,9 @@
   ],
   "settings": {
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.testing.unittestEnabled": true,
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestArgs": ["-v", "-s", "./tests", "-p", "test_*.py"],
     "files.associations": {
       "**/PKGBUILD": "shellscript"
     },
@@ -121,10 +124,10 @@
         "problemMatcher": []
       },
       {
-        // Same checks as the CI smoke test: --help, --see-config with an empty config dir, module imports.
-        "label": "WinJitsu: smoke test",
-        "type": "shell",
-        "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
+        "label": "WinJitsu: tests",
+        "type": "process",
+        "command": "${command:python.interpreterPath}",
+        "args": ["-m", "unittest", "discover", "-s", "tests", "-v"],
         "options": {
           "cwd": "${workspaceFolder:WinJitsu}",
           "env": {
@@ -135,6 +138,20 @@
           "kind": "test",
           "isDefault": true
         },
+        "problemMatcher": []
+      },
+      {
+        // Same checks as the CI smoke test: --help, --see-config with an empty config dir, module imports.
+        "label": "WinJitsu: smoke test",
+        "type": "shell",
+        "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
+        "options": {
+          "cwd": "${workspaceFolder:WinJitsu}",
+          "env": {
+            "PYTHONPATH": "${workspaceFolder:WinJitsu}/src"
+          }
+        },
+        "group": "test",
         "problemMatcher": []
       },
       {

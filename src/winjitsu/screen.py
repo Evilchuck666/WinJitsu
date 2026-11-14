@@ -30,8 +30,7 @@ def get_screens():
     config_timestamp = resources.config_timestamp  # config_timestamp, NOT timestamp — timestamp causes BadMatch on some drivers
     primary_id       = root.xrandr_get_output_primary().output
 
-    primary = None
-    others  = []
+    monitors = []
 
     for output_id in resources.outputs:
         output_info = display.xrandr_get_output_info(output_id, config_timestamp)
@@ -48,10 +47,27 @@ def get_screens():
             "y":      crtc_info.y
         }
 
+        monitors.append((output_id, screen_geometry))
+
+    return _split_primary(monitors, primary_id)
+
+
+def _split_primary(monitors, primary_id):
+    """(primary, others) from (output_id, geometry) pairs of the active monitors."""
+    primary = None
+    others  = []
+
+    for output_id, screen_geometry in monitors:
         if output_id == primary_id:
             primary = screen_geometry
         else:
             others.append(screen_geometry)
+
+    # No primary output set (no `xrandr --primary`, reported as 0) or it is
+    # disabled: use the first active monitor instead of treating the whole X
+    # screen as a single monitor.
+    if primary is None and others:
+        primary = others.pop(0)
 
     return primary, others
 

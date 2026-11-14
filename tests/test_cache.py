@@ -1,0 +1,86 @@
+import sqlite3
+import tempfile
+import unittest
+from pathlib  import Path
+from unittest import mock
+
+from winjitsu import cache
+
+
+HOME   = {"WINDOW": "7", "X": 10, "Y": 20, "WIDTH": 300, "HEIGHT": 200, "SCREEN": 0}
+TARGET = (0, 0, 960, 1080)
+
+
+def _cached(reached):
+    return {**HOME, "WM_CLASS": "kitty", "_target": TARGET, "_reached": reached}
+
+
+def _window(x, y, width, height):
+    return {"WINDOW": 7, "X": x, "Y": y, "WIDTH": width, "HEIGHT": height, "SCREEN": 0}
+
+
+class ResolveHomeTest(unittest.TestCase):
+    def test_without_cache_the_window_is_the_home(self):
+        window = _window(1, 2, 3, 4)
+        self.assertIs(cache._resolve_home(window, None), window)
+
+    def test_still_where_it_settled_keeps_the_home(self):
+        home = cache._resolve_home(_window(0, 24, 960, 1056), _cached((0, 24, 960, 1056)))
+        self.assertEqual((home["X"], home["Y"], home["WIDTH"], home["HEIGHT"]), (10, 20, 300, 200))
+
+    def test_small_differences_still_count_as_the_same_place(self):
+        home = cache._resolve_home(_window(1, 26, 959, 1056), _cached((0, 24, 960, 1056)))
+        self.assertEqual(home["X"], 10)
+
+    def test_moved_away_makes_the_current_geometry_the_home(self):
+        window = _window(500, 400, 960, 1056)
+        self.assertIs(cache._resolve_home(window, _cached((0, 24, 960, 1056))), window)
+
+    def test_without_a_settled_geometry_compares_with_the_target(self):
+        self.assertEqual(cache._resolve_home(_window(*TARGET), _cached(None))["X"], 10)
+
+
+class DatabaseTest(unittest.TestCase):
+    def setUp(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.db_path = Path(temp_dir.name) / "state.db"
+
+        patcher = mock.patch.object(cache, "DB_PATH", self.db_path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_save_and_load_round_trip(self):
+        cache.init_db()
+        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
+
+        state = cache.load_state(7, "kitty")
+        self.assertEqual((state["X"], state["Y"], state["WIDTH"], state["HEIGHT"]), (10, 20, 300, 200))
+        self.assertEqual(state["_target"],  TARGET)
+        self.assertEqual(state["_reached"], (0, 24, 960, 1056))
+        self.assertIsNone(cache.load_state(7, "firefox"))
+
+    def test_init_db_adds_the_new_columns_to_an_old_database(self):
+        old_schema = cache._CREATE_TABLE.replace(
+            "    reached_x  INTEGER,\n    reached_y  INTEGER,\n    reached_w  INTEGER,\n    reached_h  INTEGER,\n", ""
+        )
+        self.assertNotIn("reached_x", old_schema)
+
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(old_schema)
+            connection.execute(
+                "INSERT INTO windows VALUES ('id', '7', 10, 20, 300, 200, 0, 'kitty', 0, 0, 960, 1080)"
+            )
+
+        cache.init_db()
+
+        state = cache.load_state(7, "kitty")
+        self.assertEqual(state["_target"], TARGET)
+        self.assertIsNone(state["_reached"])
+
+        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
+        self.assertEqual(cache.load_state(7, "kitty")["_reached"], (0, 24, 960, 1056))
+
+
+if __name__ == "__main__":
+    unittest.main()

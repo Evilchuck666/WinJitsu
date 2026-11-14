@@ -23,9 +23,12 @@ winjitsu --write-config
 
 # Build wheel and sdist
 python -m build
+
+# Unit tests (stdlib unittest, no X server needed)
+make test        # PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-No test suite or linter is configured. CI only builds, runs `twine check` and smoke-tests the CLI without an X server (`--help`, `--see-config`, module imports).
+`tests/fakes.py` stands in for `xdotool` and an ICCCM window manager (frame decorations, resize increments), so the action tests run whole scenarios such as `W`, `U`, `TF`. No linter is configured. CI builds, runs `twine check`, smoke-tests the CLI without an X server (`--help`, `--see-config`, module imports) and runs the unit tests against the installed wheel.
 
 **Dependencies:** `python-xlib` (Python, declared in `pyproject.toml`) and `xdotool` (system binary, called through `subprocess`). An X11 session with RandR is needed at runtime.
 
@@ -36,19 +39,19 @@ All code lives in `src/winjitsu/`. `__init__.py` reads `__version__` from the in
 **Data flow:**
 ```
 winjitsu ACTION → cli.main → daemon.send_command ──Unix socket──▶ _CommandHandler
-  → _schedule_action (debounce) → _run_action → actions.dispatch
+  → _schedule_action (debounce) → action queue → _action_worker → actions.dispatch
   → window.get_window_position + screen.get_screen_for_window
-  → cache._update_state (save home + target) → window.move_window
+  → window.move_window (returns the settled geometry) → cache._update_state (save home, target, settled)
 ```
 
 | Module       | Role                                                                                                                                  |
 |--------------|---------------------------------------------------------------------------------------------------------------------------------------|
 | `cli.py`     | argparse entry point. Pre-parses `--read-config` so it replaces the module-level config before anything uses it; `--steps`, `--padding`, `--delay-ms` then override it. Handles `--daemon`, `--reload-daemon`, `--write-config`, `--see-config`, or sends the action to the daemon. |
-| `daemon.py`  | Forks and detaches (`setsid`, stdio to `/dev/null`), writes the PID file and serves a `ThreadingUnixStreamServer` (socket mode `0600`). Each action restarts a `threading.Timer` of `delay_ms`; only the last action of a burst runs and superseded callers get `OK`. Clears the window cache on start. |
-| `actions.py` | `VALID_ACTIONS` and `dispatch()`. `direction()` computes halves, quarters and `C` (center, keeps size) relative to the window's monitor; `fullscreen()` applies `padding`; `restore()` returns to the cached home; `toggle_fullscreen()` compares the current geometry with the fullscreen one; `toggle_display()` cycles to the next monitor keeping size and relative offset. |
-| `window.py`  | `xdotool` wrappers: active window geometry (`getwindowgeometry --shell`), WM class, and `move_window()`, which clamps to the X screen and runs `cfg.steps` resize+move steps eased with smoothstep. |
-| `screen.py`  | One shared `Xlib.display.Display` (lazily created under a lock). `get_screens()` returns `(primary, others)` from RandR CRTCs; `find_screen_for_window()` picks the monitor containing the window center, or the nearest one. |
-| `cache.py`   | SQLite store keyed by `(window_id, wm_class)`: home geometry plus the last target WinJitsu moved the window to. `_resolve_home()` keeps the old home only while the window is still exactly at that last target; otherwise its current geometry becomes the new home. |
+| `daemon.py`  | Forks and detaches (`setsid`, stdio to `/dev/null`), writes the PID file and serves a `ThreadingUnixStreamServer` (socket mode `0600`). Each action restarts a `threading.Timer` of `delay_ms`; only the last action of a burst is queued and superseded callers get `OK`. A single worker thread runs queued actions one at a time, in order, so animations never overlap and the X connection is used from one thread. Clears the window cache on start. |
+| `actions.py` | `VALID_ACTIONS` and `dispatch()`. `direction()` computes halves, quarters and `C` (center, keeps size) relative to the window's monitor; `fullscreen()` applies `padding`; `restore()` returns to the cached home; `toggle_fullscreen()` treats the window as fullscreen when it is still where a cached fullscreen move left it, or at the fullscreen geometry, and returns `restore()`'s warning; `toggle_display()` cycles to the next monitor keeping size and relative offset. |
+| `window.py`  | `xdotool` wrappers: active window geometry (`getwindowgeometry --shell`, converted to the outer frame with `_NET_FRAME_EXTENTS`), WM class, and `move_window()`, which clamps to the X screen, runs `cfg.steps` resize+move steps eased with smoothstep and returns the geometry the window settled at. `geometry_matches()` compares with a 2 px tolerance. |
+| `screen.py`  | One shared `Xlib.display.Display` (lazily created under a lock). `get_screens()` returns `(primary, others)` from RandR CRTCs, using the first active monitor when no primary output is set; `find_screen_for_window()` picks the monitor containing the window center, or the nearest one. |
+| `cache.py`   | SQLite store keyed by `(window_id, wm_class)`: home geometry, the last target WinJitsu asked for (`last_*`) and the geometry the window settled at (`reached_*`, added to older databases by `init_db()`). `_resolve_home()` keeps the old home only while the window is still where it settled; otherwise its current geometry becomes the new home. |
 | `config.py`  | `_Config` dataclass loaded from INI at import time into the module-level `cfg` (defaults: `steps=25`, `padding=0`, `delay_ms=250`); invalid values fall back to defaults with a warning. |
 
 **Runtime files:**
@@ -57,6 +60,7 @@ winjitsu ACTION → cli.main → daemon.send_command ──Unix socket──▶ 
 - Window state: `~/.cache/winjitsu/state.db`.
 
 **Gotchas:**
+- Geometries are the window's outer frame. `xdotool getwindowgeometry` reports the client area, but window managers place the frame at the position given to `windowmove`, and `windowsize` sets the client area; `window.py` converts both ways.
 - Use `config_timestamp`, not `timestamp`, for RandR output/CRTC queries; the latter causes `BadMatch` on some drivers (commented in `screen.py`).
 - The daemon reads `cfg` once at startup, so config or code changes need `winjitsu --reload-daemon`.
 - Replies starting with `WARN:` or `ERROR:` are printed by the client. `send_command()` returns `True` on success, `False` when the daemon replied `ERROR:` (exit 1) and `None` when the daemon cannot be reached (exit 1 with the "daemon is not running" hint).
@@ -70,7 +74,7 @@ winjitsu ACTION → cli.main → daemon.send_command ──Unix socket──▶ 
 
 ## Release
 
-Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match. `.github/workflows/release.yaml` builds and smoke-tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
+Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match. `.github/workflows/release.yaml` builds, smoke-tests and runs the unit tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
 
 ```bash
 gh workflow run release.yaml -R Evilchuck666/WinJitsu -f version=X.Y.Z --ref main

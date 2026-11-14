@@ -82,6 +82,17 @@ jobs:
             echo "::endgroup::"
           done
 
+      # tests/fakes.py stands in for xdotool and the window manager, so the
+      # unit tests run here too, against the installed wheel.
+      - name: Unit tests
+        run: |
+          set -euo pipefail
+          for py in 3.10 3.14; do
+            echo "::group::Python $py"
+            XDG_CONFIG_HOME="$RUNNER_TEMP/config-$py" "venv-$py/bin/python" -m unittest discover -s tests -v
+            echo "::endgroup::"
+          done
+
       - uses: actions/upload-artifact@v7
         with:
           name: WinJitsu-dist

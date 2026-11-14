@@ -1,5 +1,6 @@
 import os
 import sys
+import queue
 import socket
 import socketserver
 import signal
@@ -28,6 +29,7 @@ class _Pending:
 _current_pending: "_Pending | None" = None
 _pending_timer:   "threading.Timer | None" = None
 _pending_lock  = threading.Lock()
+_action_queue: "queue.Queue[_Pending]" = queue.Queue()
 
 
 def _schedule_action(action) -> _Pending:
@@ -46,14 +48,15 @@ def _schedule_action(action) -> _Pending:
             _current_pending.event.set()
 
         _current_pending = pending
-        new_timer        = threading.Timer(cfg.delay_ms / 1000, _run_action)
+        new_timer        = threading.Timer(cfg.delay_ms / 1000, _enqueue_action)
         _pending_timer   = new_timer
 
         new_timer.start()
     return pending
 
 
-def _run_action():
+def _enqueue_action():
+    # Timer callback: the burst is over, hand its last action to the worker.
     global _current_pending, _pending_timer
 
     with _pending_lock:
@@ -61,7 +64,20 @@ def _run_action():
         _current_pending = None
         _pending_timer = None
 
-    if pending is None or pending.cancelled:
+    if pending is not None:
+        _action_queue.put(pending)
+
+
+def _action_worker():
+    # The only thread that runs actions: one at a time and in arrival order, so
+    # an action never starts while the previous animation is still moving the
+    # window, and the shared X connection is never used from two threads.
+    while True:
+        _run_action(_action_queue.get())
+
+
+def _run_action(pending):
+    if pending.cancelled:
         return
 
     try:
@@ -132,6 +148,7 @@ def run_daemon():
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT,  _on_signal)
 
+    threading.Thread(target=_action_worker, daemon=True).start()
     threading.Thread(target=socket_server.serve_forever, daemon=True).start()
     stop_event.wait()
 

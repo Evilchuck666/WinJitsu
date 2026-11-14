@@ -1,11 +1,13 @@
 import sqlite3
 from pathlib import Path
-from uuid import uuid4
-from .window import get_wm_class
+from uuid    import uuid4
+from .window import get_wm_class, geometry_of, geometry_matches
 
 
 DB_PATH = Path.home() / ".cache" / "winjitsu" / "state.db"
 
+# last_*: the target WinJitsu asked for. reached_*: the frame geometry the
+# window actually settled at, which is what later reads of the window return.
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS windows (
     id         TEXT    PRIMARY KEY,
@@ -20,15 +22,27 @@ CREATE TABLE IF NOT EXISTS windows (
     last_y     INTEGER NOT NULL,
     last_w     INTEGER NOT NULL,
     last_h     INTEGER NOT NULL,
+    reached_x  INTEGER,
+    reached_y  INTEGER,
+    reached_w  INTEGER,
+    reached_h  INTEGER,
     UNIQUE(window_id, wm_class)
 )
 """
+
+_REACHED_COLUMNS = ("reached_x", "reached_y", "reached_w", "reached_h")
 
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as connection:
         connection.execute(_CREATE_TABLE)
+
+        # Databases created by older versions lack the reached_* columns.
+        existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
+        for column in _REACHED_COLUMNS:
+            if column not in existing_columns:
+                connection.execute(f"ALTER TABLE windows ADD COLUMN {column} INTEGER")
 
 
 def load_state(window_id, wm_class):
@@ -50,6 +64,8 @@ def load_state(window_id, wm_class):
     if row is None:
         return None
 
+    reached = (row["reached_x"], row["reached_y"], row["reached_w"], row["reached_h"])
+
     return {
         "WINDOW":   row["window_id"],
         "X":        row["x"],
@@ -58,33 +74,34 @@ def load_state(window_id, wm_class):
         "HEIGHT":   row["height"],
         "SCREEN":   row["screen"],
         "WM_CLASS": row["wm_class"],
-        "_last_X":  row["last_x"],
-        "_last_Y":  row["last_y"],
-        "_last_W":  row["last_w"],
-        "_last_H":  row["last_h"],
+        "_target":  (row["last_x"], row["last_y"], row["last_w"], row["last_h"]),
+        "_reached": None if None in reached else reached,
     }
 
 
-def save_state(window_id, home_state, target_x, target_y, target_width, target_height, wm_class):
+def save_state(window_id, home_state, target, reached, wm_class):
     if wm_class is None:
         return
 
-    window_id  = str(window_id)
-    home_state = {**home_state, "WINDOW": str(home_state["WINDOW"])}
+    window_id = str(window_id)
+    reached   = reached if reached is not None else (None, None, None, None)
 
     with sqlite3.connect(DB_PATH) as connection:
         connection.execute(
             """
             INSERT INTO windows
                 (id, window_id, x, y, width, height, screen, wm_class,
-                 last_x, last_y, last_w, last_h)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 last_x, last_y, last_w, last_h,
+                 reached_x, reached_y, reached_w, reached_h)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(window_id, wm_class) DO UPDATE SET
                 x=excluded.x,         y=excluded.y,
                 width=excluded.width, height=excluded.height,
                 screen=excluded.screen,
                 last_x=excluded.last_x, last_y=excluded.last_y,
-                last_w=excluded.last_w, last_h=excluded.last_h
+                last_w=excluded.last_w, last_h=excluded.last_h,
+                reached_x=excluded.reached_x, reached_y=excluded.reached_y,
+                reached_w=excluded.reached_w, reached_h=excluded.reached_h
             """,
             (
                 str(uuid4()),
@@ -93,50 +110,43 @@ def save_state(window_id, home_state, target_x, target_y, target_width, target_h
                 home_state["WIDTH"], home_state["HEIGHT"],
                 home_state.get("SCREEN", 0),
                 wm_class,
-                target_x,     target_y,
-                target_width, target_height,
+                *target,
+                *reached,
             )
         )
 
 
 def _resolve_home(window, cached_state):
-    # If the window is still at the last position we animated it to, the original
-    # home hasn't changed — reuse it. Otherwise, the window moved elsewhere, and its
+    # If the window is still where WinJitsu left it, the original home hasn't
+    # changed — reuse it. Otherwise, the window moved elsewhere, and its
     # current position becomes the new home.
     if cached_state is None:
         return window
 
-    last_target_geometry = (
-        cached_state.get("_last_X"), cached_state.get("_last_Y"),
-        cached_state.get("_last_W"), cached_state.get("_last_H")
-    )
+    left_at = cached_state["_reached"] or cached_state["_target"]
 
-    if None in last_target_geometry:
-        return window
-
-    current_geometry = (window["X"], window["Y"], window["WIDTH"], window["HEIGHT"])
-    if current_geometry == last_target_geometry:
+    if geometry_matches(geometry_of(window), left_at):
         return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
 
     return window
 
 
-def _update_state(window, target_x, target_y, target_width, target_height):
-    target_x = int(round(target_x))
-    target_y = int(round(target_y))
+def _update_state(window, target, reached):
+    # window: geometry before the move. target: what was asked for. reached:
+    # where the window settled, or None if it could not be moved.
+    if reached is None:
+        return
 
-    target_width  = int(round(target_width))
-    target_height = int(round(target_height))
-
+    target   = tuple(int(round(value)) for value in target)
     wm_class = get_wm_class(window["WINDOW"])
 
     if wm_class is None:
         return
-    
+
     cached_state = load_state(window["WINDOW"], wm_class)
     home_state   = _resolve_home(window, cached_state)
 
-    save_state(window["WINDOW"], home_state, target_x, target_y, target_width, target_height, wm_class)
+    save_state(window["WINDOW"], home_state, target, reached, wm_class)
 
 
 def clear_cache():

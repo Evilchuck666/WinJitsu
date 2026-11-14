@@ -1,12 +1,60 @@
 import subprocess
-from .config import cfg
-from .screen import _get_display
+import time
+from Xlib     import Xatom
+from Xlib     import error as xerror
+from .config  import cfg
+from .screen  import _get_display
 
 
-def get_window_position():
+# Geometries are (x, y, width, height) of the window's outer frame, decorations
+# included. xdotool reports the client area but, following ICCCM, window
+# managers place the frame at the position passed to windowmove, so mixing the
+# two makes decorated windows drift and never match what WinJitsu saved.
+
+# Pixels two geometries may differ by and still count as the same position.
+GEOMETRY_TOLERANCE = 2
+
+_SETTLE_ATTEMPTS = 10
+_SETTLE_INTERVAL = 0.02
+
+
+def geometry_of(window):
+    return window["X"], window["Y"], window["WIDTH"], window["HEIGHT"]
+
+
+def geometry_matches(first, second, tolerance=GEOMETRY_TOLERANCE):
+    if first is None or second is None:
+        return False
+
+    return all(abs(a - b) <= tolerance for a, b in zip(first, second))
+
+
+def _client_to_frame(client_geometry, extents):
+    left, right, top, bottom = extents
+    x, y, width, height = client_geometry
+    return x - left, y - top, width + left + right, height + top + bottom
+
+
+def get_frame_extents(window_id):
+    """(left, right, top, bottom) decoration sizes from _NET_FRAME_EXTENTS, zeros when unknown."""
+    display = _get_display()
+
     try:
-        window_id       = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
-        geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", window_id]).decode()
+        window        = display.create_resource_object("window", int(window_id))
+        extents_reply = window.get_full_property(display.intern_atom("_NET_FRAME_EXTENTS"), Xatom.CARDINAL)
+    except (xerror.XError, ValueError):
+        return 0, 0, 0, 0
+
+    if extents_reply is None or extents_reply.format != 32 or len(extents_reply.value) != 4:
+        return 0, 0, 0, 0
+
+    left, right, top, bottom = (int(value) for value in extents_reply.value)
+    return left, right, top, bottom
+
+
+def get_window_geometry(window_id):
+    try:
+        geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", str(window_id)]).decode()
         window_geometry = {}
 
         for line in geometry_output.splitlines():
@@ -15,10 +63,21 @@ def get_window_position():
 
             key, value = line.split("=", 1)
             window_geometry[key] = int(value)
-
-        return window_geometry
     except (subprocess.CalledProcessError, ValueError):
         raise RuntimeError("Could not get window position. Is xdotool installed?")
+
+    frame = _client_to_frame(geometry_of(window_geometry), get_frame_extents(window_geometry["WINDOW"]))
+    window_geometry["X"], window_geometry["Y"], window_geometry["WIDTH"], window_geometry["HEIGHT"] = frame
+    return window_geometry
+
+
+def get_window_position():
+    try:
+        window_id = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Could not get window position. Is xdotool installed?")
+
+    return get_window_geometry(window_id)
 
 
 def get_wm_class(window_id):
@@ -30,7 +89,33 @@ def get_wm_class(window_id):
         return None
 
 
-def move_window(target_width, target_height, window_id, current_w, current_h, current_x, current_y, target_x, target_y):
+def _settled_geometry(window_id):
+    # The window manager applies the last move asynchronously: read until two
+    # consecutive reads agree so the saved geometry is where the window ended up.
+    previous = None
+
+    for _ in range(_SETTLE_ATTEMPTS):
+        try:
+            current = geometry_of(get_window_geometry(window_id))
+        except RuntimeError:
+            return None
+
+        if current == previous:
+            break
+
+        previous = current
+        time.sleep(_SETTLE_INTERVAL)
+
+    return previous
+
+
+def move_window(window, target_x, target_y, target_width, target_height):
+    """Animate the window's frame to the target geometry.
+
+    Returns the frame geometry the window settled at, which can differ from the
+    target (clamping, size increments, window manager constraints), or None if
+    the window could not be moved.
+    """
     def _ease(t):
         # smoothstep: eases in and out, producing natural-feeling animation
         return t * t * (3.0 - 2.0 * t)
@@ -38,7 +123,7 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
     display_screen = _get_display().screen()
     display_width  = int(display_screen.width_in_pixels)
     display_height = int(display_screen.height_in_pixels)
-    
+
     target_width  = min(target_width,  display_width)
     target_height = min(target_height, display_height)
 
@@ -46,7 +131,9 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
     target_x = max(0, min(target_x, display_width  - target_width))
     target_y = max(0, min(target_y, display_height - target_height))
 
-    window_id_str = str(window_id)
+    window_id_str = str(window["WINDOW"])
+    current_x, current_y, current_w, current_h = geometry_of(window)
+    left, right, top, bottom = get_frame_extents(window["WINDOW"])
 
     for step in range(1, cfg.steps + 1):
         ease_factor    = _ease(step / cfg.steps)
@@ -55,11 +142,17 @@ def move_window(target_width, target_height, window_id, current_w, current_h, cu
         interp_x       = current_x + (target_x - current_x) * ease_factor
         interp_y       = current_y + (target_y - current_y) * ease_factor
 
+        # windowsize sets the client area; windowmove places the frame.
+        client_width   = max(1, round(interp_width)  - left - right)
+        client_height  = max(1, round(interp_height) - top  - bottom)
+
         result = subprocess.run([
             "xdotool",
-            "windowsize", window_id_str, str(round(interp_width)), str(round(interp_height)),
-            "windowmove", window_id_str, str(round(interp_x)),     str(round(interp_y)),
+            "windowsize", window_id_str, str(client_width),   str(client_height),
+            "windowmove", window_id_str, str(round(interp_x)), str(round(interp_y)),
         ])
-        
+
         if result.returncode != 0:
-            break
+            return None
+
+    return _settled_geometry(window["WINDOW"])

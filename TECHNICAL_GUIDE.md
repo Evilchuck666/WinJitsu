@@ -76,6 +76,14 @@ This allows you to run `winjitsu` from anywhere.
     winjitsu --help
     ```
 
+### Running the tests
+
+The unit tests use the standard library only and don't need an X server:
+
+```bash
+make test   # or: PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
 ### Manual Installation (From Source)
 
 Clone the repository and install using `pip`:
