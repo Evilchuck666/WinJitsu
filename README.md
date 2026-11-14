@@ -14,6 +14,15 @@ on your screen with smooth animations, making your workflow feel more organic an
 
 ---
 
+<!-- SCREENSHOTS:START -->
+## Screenshots
+
+![WinJitsu — recorded-output](site/assets/screenshots/cli-help.png)
+
+WinJitsu's actual CLI help, rendered from recorded output. A desktop snapping demonstration is still pending because X11 access is unavailable here.
+
+<!-- SCREENSHOTS:END -->
+
 ## 🚀 Features
 
 -   **Smooth Animations**: Windows glide to their new positions instead of just jumping there. 🌬️
