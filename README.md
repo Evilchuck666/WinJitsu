@@ -7,15 +7,16 @@
 [![Latest release](https://img.shields.io/github/v/release/Evilchuck666/WinJitsu?label=download&sort=semver)](https://github.com/Evilchuck666/WinJitsu/releases/latest)
 [![Build and tests](https://github.com/Evilchuck666/WinJitsu/actions/workflows/release.yaml/badge.svg?branch=main)](https://github.com/Evilchuck666/WinJitsu/actions/workflows/release.yaml)
 
-**WinJitsu** is a slick, animated window management tool for Linux (X11).
+**Snap your windows into place, with smooth animations.**
+
+WinJitsu is a slick, animated window management tool for Linux (X11).
 It allows you to effortlessly snap your active windows to various positions
 on your screen with smooth animations, making your workflow feel more organic and responsive. ✨
 
-
----
+🌐 **Website:** https://evilchuck666.github.io/WinJitsu/
 
 <!-- SCREENSHOTS:START -->
-## Screenshots
+## 📸 Screenshots
 
 ![WinJitsu — recorded-output](site/assets/screenshots/cli-help.png)
 
@@ -23,7 +24,7 @@ WinJitsu's actual CLI help, rendered from recorded output. A desktop snapping de
 
 <!-- SCREENSHOTS:END -->
 
-## 🚀 Features
+## ✨ Features
 
 -   **Smooth Animations**: Windows glide to their new positions instead of just jumping there. 🌬️
 -   **Grid Snapping**: Position windows easily to the North, South, East, West, corners, or center. 🧭
@@ -33,10 +34,42 @@ WinJitsu's actual CLI help, rendered from recorded output. A desktop snapping de
 -   **Config File**: Persist your preferences in `~/.config/winjitsu/config.ini`. ⚙️
 -   **CLI Overrides**: Override config values when starting the daemon — no file editing needed. 🎛️
 
+## 📥 Download
 
----
+| Channel | Package |
+| --- | --- |
+| Arch Linux (AUR) | [winjitsu](https://aur.archlinux.org/packages/winjitsu) |
+| PyPI | [WinJitsu](https://pypi.org/project/WinJitsu/) |
+| GitHub release | [Wheel and source archive](https://github.com/Evilchuck666/WinJitsu/releases/latest) |
 
-## 🛠️ Requirements
+[Release notes](https://github.com/Evilchuck666/WinJitsu/releases/latest) · [SHA256SUMS.txt](https://github.com/Evilchuck666/WinJitsu/releases/latest/download/SHA256SUMS.txt)
+
+## 🚀 Getting started
+
+### 🏹 On Arch‑based systems
+
+WinJitsu is available in the AUR. You can install it using your favorite AUR helper (e.g., `yay`):
+
+```bash
+yay -S winjitsu
+```
+
+### 🐍 From PyPI
+
+```bash
+pip install WinJitsu
+```
+
+`xdotool` still has to come from your distribution (see Requirements below).
+
+### ▶️ First run
+
+```bash
+winjitsu --daemon   # start the daemon once per session
+winjitsu E          # snap the active window to the right half
+```
+
+## 📋 Requirements
 
 Make sure you have the following installed on your system:
 
@@ -63,66 +96,6 @@ sudo apt install python3 xdotool python3-xlib
 ```bash
 sudo dnf install python3 xdotool python3-xlib
 ```
-
-
----
-
-## 📦 Installation
-
-### 🏹 On Arch‑based systems
-
-WinJitsu is available in the AUR. You can install it using your favorite AUR helper (e.g., `yay`):
-
-```bash
-yay -S winjitsu
-```
-
-### 🐍 From PyPI
-
-```bash
-pip install WinJitsu
-```
-
-`xdotool` still has to come from your distribution (see Requirements above).
-
-### Building and Installing Wheel
-
-To install WinJitsu as a package, you can build a wheel and install it.
-This uses the standard `pyproject.toml` configuration to build the package.
-This allows you to run `winjitsu` from anywhere.
-
-1.  **Install build tools**:
-    ```bash
-    pip install build
-    ```
-
-2.  **Build the package**:
-    ```bash
-    python3 -m build
-    ```
-
-3.  **Install the wheel**:
-    ```bash
-    pip install dist/winjitsu-*-py3-none-any.whl --force-reinstall
-    ```
-
-4.  **Run WinJitsu**:
-    ```bash
-    winjitsu --help
-    ```
-
-### Manual Installation (From Source)
-
-Clone the repository and install using `pip`:
-
-```bash
-git clone https://github.com/Evilchuck666/WinJitsu.git
-cd WinJitsu
-pip install .
-```
-
-
----
 
 ## 🎮 Usage
 
@@ -156,59 +129,7 @@ winjitsu [ACTION] [OPTIONS]
 
 The **home position** is where a window was before WinJitsu first moved it. It is kept per window in `~/.cache/winjitsu/state.db` and reset whenever the daemon starts or you move the window yourself.
 
-
----
-
-## ⚙️ Configuration
-
-WinJitsu can be configured via a file or directly from the command line. CLI flags always take priority over the config file. 🏆
-
-### Config File
-
-The config file lives at `~/.config/winjitsu/config.ini` (respects `$XDG_CONFIG_HOME`).
-
-```bash
-winjitsu --write-config     # 📝 Save current settings to the config file
-winjitsu --see-config       # 👀 Show the active config file path and values
-winjitsu --read-config PATH # 📂 Use a different config file for this run
-```
-
-### Available Options
-
-| Flag            | Config key          | Default | Description                                           |
-|:----------------|:--------------------|:--------|:------------------------------------------------------|
-| `--steps N`     | `[animation] steps` | `25`    | Animation steps — higher is smoother but slower 🎞️   |
-| `--padding PX`  | `[display] padding` | `0`     | Gap in pixels around the window when fullscreening 📐 |
-| `--delay-ms MS` | `[daemon] delay_ms` | `250`   | Delay in ms before an action fires in daemon mode ⏱️  |
-
-### Examples
-
-```bash
-winjitsu --daemon --steps 10                    # Start daemon with snappy animation 💨
-winjitsu --daemon --padding 8                   # Start daemon with a cozy fullscreen gap 🖼️
-winjitsu --write-config --steps 15 --padding 4  # Save these as your defaults 💾
-```
-
-
----
-
-## ⚡ Daemon Mode
-
-Running WinJitsu as a background daemon makes hotkey responses feel instant and prevents duplicate actions from key repeat. 🚀
-
-```bash
-winjitsu --daemon           # Start the daemon in the background
-winjitsu --reload-daemon    # Restart the daemon 🔄
-```
-
-When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The daemon waits a short delay (configurable with `--delay-ms`) and only runs the last action of a rapid burst, so key repeat collapses into a single, clean move. ✨
-
-> 💡 **Tip:** Start the daemon on login and bind your hotkeys to `winjitsu [ACTION]` — you'll barely notice the tool is even there.
-
-
----
-
-## 🎹 Binding Keys
+### Binding keys
 
 For the best experience, bind these commands to keyboard shortcuts in your window manager configuration
 (e.g., i3, creating custom shortcuts in GNOME/KDE).
@@ -219,8 +140,11 @@ Example:
 
 Happy tiling! 🎉
 
----
+## 📚 Learn more
+
+- [Technical guide](TECHNICAL_GUIDE.md): configuration file and options,
+  daemon mode, and installing from a wheel or from source.
 
 ## ⚖️ License
 
-This project is licensed under the GPLv3 License – see the [LICENSE](LICENSE) file for details.
+WinJitsu is free software released under the **GNU General Public License v3.0** (GPL-3.0). See [LICENSE](LICENSE).
