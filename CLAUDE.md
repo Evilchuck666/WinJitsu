@@ -24,6 +24,10 @@ winjitsu --write-config
 # Build wheel and sdist
 python -m build
 
+# Arch: replace the installed winjitsu package with a pacman "nightly" built
+# from this checkout (uncommitted changes included), then reload the daemon
+./install-nightly.sh            # --no-install only builds it into PKGs/
+
 # Unit tests (stdlib unittest, no X server needed)
 make test        # PYTHONPATH=src python -m unittest discover -s tests -v
 ```
