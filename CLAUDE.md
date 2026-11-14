@@ -70,8 +70,8 @@ winjitsu ACTION → cli.main → daemon.send_command ──Unix socket──▶ 
 
 ## Release
 
-Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match. `.github/workflows/release.yml` builds and smoke-tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
+Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match. `.github/workflows/release.yaml` builds and smoke-tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
 
 ```bash
-gh workflow run release.yml -R Evilchuck666/WinJitsu -f version=X.Y.Z --ref main
+gh workflow run release.yaml -R Evilchuck666/WinJitsu -f version=X.Y.Z --ref main
 ```

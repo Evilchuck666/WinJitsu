@@ -18,7 +18,7 @@ on:
       - 'README.md'
       - 'LICENSE'
       - 'arch/**'
-      - '.github/workflows/release.yml'
+      - '.github/workflows/release.yaml'
   pull_request:
   workflow_dispatch:
     inputs:
@@ -30,6 +30,10 @@ on:
 
 permissions:
   contents: read
+
+# The JavaScript actions below run on Node 24.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 concurrency:
   group: build-${{ github.ref }}-${{ github.event_name }}
