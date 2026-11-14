@@ -32,17 +32,30 @@ CREATE TABLE IF NOT EXISTS windows (
 
 _REACHED_COLUMNS = ("reached_x", "reached_y", "reached_w", "reached_h")
 
+# What a broken or vanished cache raises. The cache is an extra: callers turn
+# these into warnings instead of failing the action.
+CACHE_ERRORS = (sqlite3.Error, OSError)
+
+
+def _connect():
+    # Creates the database, its directory and the table when they are missing,
+    # e.g. ~/.cache was cleared while the daemon was running.
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DB_PATH)
+    connection.execute(_CREATE_TABLE)
+
+    # Databases created by older versions lack the reached_* columns.
+    existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
+    for column in _REACHED_COLUMNS:
+        if column not in existing_columns:
+            connection.execute(f"ALTER TABLE windows ADD COLUMN {column} INTEGER")
+
+    return connection
+
 
 def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as connection:
-        connection.execute(_CREATE_TABLE)
-
-        # Databases created by older versions lack the reached_* columns.
-        existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
-        for column in _REACHED_COLUMNS:
-            if column not in existing_columns:
-                connection.execute(f"ALTER TABLE windows ADD COLUMN {column} INTEGER")
+    with _connect() as connection:
+        connection.commit()
 
 
 def load_state(window_id, wm_class):
@@ -54,12 +67,15 @@ def load_state(window_id, wm_class):
     if not DB_PATH.exists():
         return None
 
-    with sqlite3.connect(DB_PATH) as connection:
-        connection.row_factory = sqlite3.Row
-        row = connection.execute(
-            "SELECT * FROM windows WHERE window_id = ? AND wm_class = ?",
-            (window_id, wm_class),
-        ).fetchone()
+    try:
+        with _connect() as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(
+                "SELECT * FROM windows WHERE window_id = ? AND wm_class = ?",
+                (window_id, wm_class),
+            ).fetchone()
+    except CACHE_ERRORS:
+        return None  # treated like a window WinJitsu doesn't know yet
 
     if row is None:
         return None
@@ -86,7 +102,7 @@ def save_state(window_id, home_state, target, reached, wm_class):
     window_id = str(window_id)
     reached   = reached if reached is not None else (None, None, None, None)
 
-    with sqlite3.connect(DB_PATH) as connection:
+    with _connect() as connection:
         connection.execute(
             """
             INSERT INTO windows
@@ -153,5 +169,5 @@ def clear_cache():
     if not DB_PATH.exists():
         return
 
-    with sqlite3.connect(DB_PATH) as connection:
+    with _connect() as connection:
         connection.execute("DELETE FROM windows")

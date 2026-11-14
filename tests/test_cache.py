@@ -60,6 +60,18 @@ class DatabaseTest(unittest.TestCase):
         self.assertEqual(state["_reached"], (0, 24, 960, 1056))
         self.assertIsNone(cache.load_state(7, "firefox"))
 
+    def test_save_recreates_a_removed_database(self):
+        cache.init_db()
+        self.db_path.unlink()
+        self.db_path.parent.rmdir()
+
+        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
+        self.assertEqual(cache.load_state(7, "kitty")["_reached"], (0, 24, 960, 1056))
+
+    def test_load_treats_a_broken_database_as_empty(self):
+        self.db_path.write_bytes(b"not a database " * 100)
+        self.assertIsNone(cache.load_state(7, "kitty"))
+
     def test_init_db_adds_the_new_columns_to_an_old_database(self):
         old_schema = cache._CREATE_TABLE.replace(
             "    reached_x  INTEGER,\n    reached_y  INTEGER,\n    reached_w  INTEGER,\n    reached_h  INTEGER,\n", ""

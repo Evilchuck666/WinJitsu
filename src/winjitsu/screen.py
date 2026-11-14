@@ -1,5 +1,7 @@
 import threading
+from Xlib     import Xatom
 from Xlib     import display as xdisplay
+from Xlib     import error as xerror
 from Xlib.ext import randr
 
 
@@ -20,6 +22,7 @@ def _get_display() -> xdisplay.Display:
 
 
 def get_screens():
+    """(primary, others): the usable area of each active monitor, minus the space panels reserve."""
     display = _get_display()
 
     if not display.has_extension('RANDR'):
@@ -49,7 +52,83 @@ def get_screens():
 
         monitors.append((output_id, screen_geometry))
 
+    screen = display.screen()
+    struts = _read_struts(display, root, screen.width_in_pixels, screen.height_in_pixels)
+    monitors = [
+        (output_id, _apply_struts(geometry, struts, screen.width_in_pixels, screen.height_in_pixels))
+        for output_id, geometry in monitors
+    ]
+
     return _split_primary(monitors, primary_id)
+
+
+def _read_struts(display, root, screen_width, screen_height):
+    """_NET_WM_STRUT_PARTIAL of every managed window, the older _NET_WM_STRUT converted to it."""
+    client_list = root.get_full_property(display.intern_atom("_NET_CLIENT_LIST"), Xatom.WINDOW)
+    struts      = []
+
+    for window_id in (client_list.value if client_list else []):
+        window = display.create_resource_object("window", window_id)
+
+        try:
+            partial = window.get_full_property(display.intern_atom("_NET_WM_STRUT_PARTIAL"), Xatom.CARDINAL)
+            simple  = None if partial else window.get_full_property(display.intern_atom("_NET_WM_STRUT"), Xatom.CARDINAL)
+        except xerror.XError:
+            continue  # closed in the meantime
+
+        if partial is not None and len(partial.value) == 12:
+            struts.append(tuple(int(value) for value in partial.value))
+        elif simple is not None and len(simple.value) == 4:
+            left, right, top, bottom = (int(value) for value in simple.value)
+            last_x, last_y = screen_width - 1, screen_height - 1
+            struts.append((left, right, top, bottom, 0, last_y, 0, last_y, 0, last_x, 0, last_x))
+
+    return struts
+
+
+def _apply_struts(monitor, struts, screen_width, screen_height):
+    """The part of the monitor no strut reserves.
+
+    Struts are measured from the edges of the whole X screen, so a reserved
+    strip only shrinks the monitors it overlaps. A strip covering a monitor
+    from edge to edge (a panel between two monitors, which EWMH can't express)
+    is ignored rather than leaving the monitor without usable space.
+    """
+    monitor_x0, monitor_y0 = monitor["x"], monitor["y"]
+    monitor_x1, monitor_y1 = monitor_x0 + monitor["width"], monitor_y0 + monitor["height"]
+    left_edge, top_edge, right_edge, bottom_edge = monitor_x0, monitor_y0, monitor_x1, monitor_y1
+
+    for (left, right, top, bottom,
+         left_y0, left_y1, right_y0, right_y1, top_x0, top_x1, bottom_x0, bottom_x1) in struts:
+        # Reserved strips as (side, x0, y0, x1, y1), end coordinates exclusive.
+        strips = [
+            ("left",   0,                    left_y0,               left,          left_y1 + 1),
+            ("right",  screen_width - right, right_y0,              screen_width,  right_y1 + 1),
+            ("top",    top_x0,               0,                     top_x1 + 1,    top),
+            ("bottom", bottom_x0,            screen_height - bottom, bottom_x1 + 1, screen_height),
+        ]
+
+        for side, x0, y0, x1, y1 in strips:
+            if x0 >= x1 or y0 >= y1:
+                continue  # this side reserves nothing
+            if x0 >= monitor_x1 or x1 <= monitor_x0 or y0 >= monitor_y1 or y1 <= monitor_y0:
+                continue  # doesn't touch this monitor
+
+            if side == "left" and x1 < monitor_x1:
+                left_edge = max(left_edge, x1)
+            elif side == "right" and x0 > monitor_x0:
+                right_edge = min(right_edge, x0)
+            elif side == "top" and y1 < monitor_y1:
+                top_edge = max(top_edge, y1)
+            elif side == "bottom" and y0 > monitor_y0:
+                bottom_edge = min(bottom_edge, y0)
+
+    return {
+        "x":      left_edge,
+        "y":      top_edge,
+        "width":  max(1, right_edge  - left_edge),
+        "height": max(1, bottom_edge - top_edge),
+    }
 
 
 def _split_primary(monitors, primary_id):

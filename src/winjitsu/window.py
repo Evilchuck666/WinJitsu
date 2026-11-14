@@ -1,7 +1,8 @@
 import subprocess
 import time
-from Xlib     import Xatom
+from Xlib     import X, Xatom
 from Xlib     import error as xerror
+from Xlib     import protocol
 from .config  import cfg
 from .screen  import _get_display
 
@@ -16,6 +17,9 @@ GEOMETRY_TOLERANCE = 2
 
 _SETTLE_ATTEMPTS = 10
 _SETTLE_INTERVAL = 0.02
+
+# Window managers ignore moves and resizes of windows in these states.
+_BLOCKING_STATES = ("_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_FULLSCREEN")
 
 
 def geometry_of(window):
@@ -89,6 +93,44 @@ def get_wm_class(window_id):
         return None
 
 
+def _clear_blocking_states(window_id):
+    """Ask the window manager to drop the maximized and fullscreen states; True if any was set."""
+    display    = _get_display()
+    state_atom = display.intern_atom("_NET_WM_STATE")
+    window     = display.create_resource_object("window", int(window_id))
+
+    try:
+        state_reply = window.get_full_property(state_atom, Xatom.ATOM)
+    except xerror.XError:
+        return False
+
+    current_states = set(state_reply.value) if state_reply else set()
+    blocking       = [display.intern_atom(name) for name in _BLOCKING_STATES]
+    present        = [atom for atom in blocking if atom in current_states]
+    if not present:
+        return False
+
+    # _NET_WM_STATE changes up to two states per message (action 0 = remove,
+    # source 1 = normal application).
+    root = display.screen().root
+    for first, second in zip(present[::2], present[1::2] + [0]):
+        event = protocol.event.ClientMessage(window=window, client_type=state_atom, data=(32, [0, first, second, 1, 0]))
+        root.send_event(event, event_mask=X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+    display.sync()
+
+    # Wait until the window manager has applied it, or moves would still be ignored.
+    for _ in range(_SETTLE_ATTEMPTS):
+        try:
+            state_reply = window.get_full_property(state_atom, Xatom.ATOM)
+        except xerror.XError:
+            break
+        if not state_reply or not set(state_reply.value) & set(present):
+            break
+        time.sleep(_SETTLE_INTERVAL)
+
+    return True
+
+
 def _settled_geometry(window_id):
     # The window manager applies the last move asynchronously: read until two
     # consecutive reads agree so the saved geometry is where the window ended up.
@@ -133,6 +175,12 @@ def move_window(window, target_x, target_y, target_width, target_height):
 
     window_id_str = str(window["WINDOW"])
     current_x, current_y, current_w, current_h = geometry_of(window)
+
+    # Unmaximizing makes the window manager put the window back at its old
+    # size; the animation still starts from the geometry it had when maximized.
+    # Decorations are read afterwards, some window managers trim them on
+    # maximized windows.
+    _clear_blocking_states(window["WINDOW"])
     left, right, top, bottom = get_frame_extents(window["WINDOW"])
 
     for step in range(1, cfg.steps + 1):

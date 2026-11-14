@@ -15,18 +15,23 @@ class FakeWindowManager:
 
     Like a real reparenting window manager, windowmove places the outer frame,
     windowsize sets the client area and getwindowgeometry reports the client
-    area. Resize increments emulate terminals that only take whole cells.
+    area. Resize increments emulate terminals that only take whole cells. A
+    maximized window ignores moves, like real window managers do, until
+    WinJitsu drops the state; it then goes back to its unmaximized frame.
     """
 
     WINDOW_ID = 4242
 
-    def __init__(self, frame, extents=(0, 0, 0, 0), increments=(1, 1), base=(0, 0), wm_class="kitty"):
-        self.frame      = tuple(frame)
-        self.extents    = extents
-        self.increments = increments
-        self.base       = base
-        self.wm_class   = wm_class
-        self.moves      = 0
+    def __init__(self, frame, extents=(0, 0, 0, 0), increments=(1, 1), base=(0, 0), wm_class="kitty",
+                 unmaximized_frame=None):
+        self.frame             = tuple(frame)
+        self.extents           = extents
+        self.increments        = increments
+        self.base              = base
+        self.wm_class          = wm_class
+        self.moves             = 0
+        self.maximized         = unmaximized_frame is not None
+        self.unmaximized_frame = unmaximized_frame
 
     def client(self):
         left, right, top, bottom = self.extents
@@ -39,11 +44,22 @@ class FakeWindowManager:
 
     def run(self, args, **kwargs):
         assert args[0] == "xdotool" and args[1] == "windowsize" and args[5] == "windowmove", args
+        if self.maximized:
+            return subprocess.CompletedProcess(args, 0)  # ignored, but not an error
+
         client_width, client_height = self._apply_increments(int(args[3]), int(args[4]))
         left, right, top, bottom    = self.extents
         self.frame = (int(args[7]), int(args[8]), client_width + left + right, client_height + top + bottom)
         self.moves += 1
         return subprocess.CompletedProcess(args, 0)
+
+    def clear_blocking_states(self, window_id):
+        if not self.maximized:
+            return False
+
+        self.maximized = False
+        self.frame     = tuple(self.unmaximized_frame)
+        return True
 
     def check_output(self, args, **kwargs):
         command = args[1]
@@ -75,6 +91,7 @@ class FakeWindowManager:
             mock.patch.object(window, "subprocess",        fake_subprocess),
             mock.patch.object(window, "get_frame_extents", lambda window_id: self.extents),
             mock.patch.object(window, "_get_display",      lambda: fake_display),
+            mock.patch.object(window, "_clear_blocking_states", lambda window_id: self.clear_blocking_states(window_id)),
         ]
 
 
