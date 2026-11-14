@@ -1,0 +1,155 @@
+{
+  "folders": [
+    {
+      "name": "WinJitsu",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "files.associations": {
+      "**/PKGBUILD": "shellscript"
+    },
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.egg-info": true
+    },
+    "search.exclude": {
+      "**/.venv": true,
+      "**/build": true,
+      "**/dist": true,
+      "PKGs": true,
+      "AUR": true,
+      "**/__pycache__": true,
+      "**/*.egg-info": true
+    },
+    "files.watcherExclude": {
+      "**/.venv/**": true,
+      "**/build/**": true,
+      "**/dist/**": true,
+      "**/PKGs/**": true,
+      "**/AUR/**": true,
+      "**/__pycache__/**": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.debugpy",
+      "github.vscode-github-actions"
+    ]
+  },
+  // PYTHONPATH points at src/ so these always run the checkout, never the copy installed by the AUR package.
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        // Runs the daemon without forking so breakpoints work. Its own XDG_RUNTIME_DIR keeps it from clashing
+        // with the installed daemon. The window state DB in ~/.cache is still shared and gets cleared on start.
+        "name": "WinJitsu: daemon (foreground)",
+        "type": "debugpy",
+        "request": "launch",
+        "code": "from winjitsu.daemon import run_daemon; run_daemon()",
+        "cwd": "${workspaceFolder:WinJitsu}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder:WinJitsu}/src",
+          "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev"
+        },
+        "console": "integratedTerminal",
+        "justMyCode": true
+      },
+      {
+        // Sends an action to the foreground daemon above (same XDG_RUNTIME_DIR).
+        "name": "WinJitsu: send action (dev daemon)",
+        "type": "debugpy",
+        "request": "launch",
+        "code": "from winjitsu.cli import main; main()",
+        "args": [
+          "${input:action}"
+        ],
+        "cwd": "${workspaceFolder:WinJitsu}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder:WinJitsu}/src",
+          "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev"
+        },
+        "console": "integratedTerminal",
+        "justMyCode": true
+      }
+    ],
+    "inputs": [
+      {
+        "id": "action",
+        "type": "pickString",
+        "description": "Action to send to the dev daemon",
+        "options": ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"],
+        "default": "C"
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "WinJitsu: sync venv",
+        "type": "process",
+        "command": "uv",
+        "args": [
+          "sync"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:WinJitsu}"
+        },
+        "problemMatcher": []
+      },
+      {
+        // Replaces the running daemon (usually the installed one) with one running this checkout.
+        // Run "winjitsu --reload-daemon" from a regular terminal to go back to the installed version.
+        "label": "WinJitsu: reload daemon (dev code)",
+        "type": "process",
+        "command": "${command:python.interpreterPath}",
+        "args": [
+          "-c",
+          "from winjitsu.cli import main; main()",
+          "--reload-daemon"
+        ],
+        "options": {
+          "cwd": "${workspaceFolder:WinJitsu}",
+          "env": {
+            "PYTHONPATH": "${workspaceFolder:WinJitsu}/src"
+          }
+        },
+        "problemMatcher": []
+      },
+      {
+        // Same checks as the CI smoke test: --help, --see-config with an empty config dir, module imports.
+        "label": "WinJitsu: smoke test",
+        "type": "shell",
+        "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
+        "options": {
+          "cwd": "${workspaceFolder:WinJitsu}",
+          "env": {
+            "PYTHONPATH": "${workspaceFolder:WinJitsu}/src"
+          }
+        },
+        "group": {
+          "kind": "test",
+          "isDefault": true
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "WinJitsu: build wheel",
+        "type": "shell",
+        "command": "make build",
+        "options": {
+          "cwd": "${workspaceFolder:WinJitsu}"
+        },
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}

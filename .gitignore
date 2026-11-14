@@ -1,11 +1,26 @@
-.idea/
+# Virtual environment and lock file (uv)
 .venv/
-
-AUR/
-PKGs/
-build/
-src/*.egg-info/
-src/winjitsu/__pycache__/
-
-WinJitsu.code-workspace
 uv.lock
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Build output: python -m build, make build
+build/
+dist/
+PKGs/
+src/*.egg-info/
+
+# Local clone of the AUR package, used by make aur
+AUR/
+
+# makepkg output when testing arch/PKGBUILD in place
+arch/src/
+arch/pkg/
+arch/WinJitsu/
+arch/*.pkg.tar*
+
+# Editor settings: the shared VS Code setup lives in WinJitsu.code-workspace
+.idea/
+.vscode/
