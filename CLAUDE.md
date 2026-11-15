@@ -67,7 +67,7 @@ winjitsu ACTION → cli.main → client.send_command ──Unix socket──▶ 
 
 **Gotchas:**
 - Geometries are the window's outer frame. `xdotool getwindowgeometry` reports the client area, but window managers place the frame at the position given to `windowmove`, and `windowsize` sets the client area; `window.py` converts both ways.
-- A dev daemon run next to the installed one needs its own `XDG_RUNTIME_DIR`, `XDG_CACHE_HOME` and `XDG_STATE_HOME` (the workspace's debug configuration sets them): with a newer cache schema it would drop the table the other daemon uses.
+- A dev daemon run next to the installed one needs its own `XDG_RUNTIME_DIR`, `XDG_CACHE_HOME` and `XDG_STATE_HOME` (the debug configuration in `.vscode/launch.json` sets them): with a newer cache schema it would drop the table the other daemon uses.
 - Use `config_timestamp`, not `timestamp`, for RandR output/CRTC queries; the latter causes `BadMatch` on some drivers (commented in `screen.py`).
 - The daemon reads `cfg` once at startup, so config or code changes need `winjitsu --reload-daemon`.
 - Replies starting with `WARN:` or `ERROR:` are printed by the client. `send_command()` returns `True` on success, `False` when it failed with the reason printed (an `ERROR:` reply, no answer within `client._CLIENT_TIMEOUT`, other socket errors; exit 1) and `None` only when no daemon listens (missing socket or connection refused; exit 1 with the "daemon is not running" hint). The daemon answers within `delay_ms` + `ACTION_TIMEOUT`, before the client gives up.

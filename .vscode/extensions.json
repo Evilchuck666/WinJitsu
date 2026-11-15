@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    // Python language support and the unittest Test Explorer
+    "ms-python.python",
+    // The debugpy configurations in launch.json
+    "ms-python.debugpy",
+    // .github/workflows/
+    "github.vscode-github-actions",
+    // install-nightly.sh
+    "timonwong.shellcheck",
+    // arch/PKGBUILD (PKGBUILD language and ShellCheck rules for it)
+    "claui.packaging",
+    // pyproject.toml
+    "tamasfe.even-better-toml"
+  ]
+}

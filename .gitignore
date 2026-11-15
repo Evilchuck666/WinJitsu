@@ -1,26 +1,27 @@
-# Virtual environment and lock file (uv)
-.venv/
-uv.lock
-
 # Python bytecode
 __pycache__/
 *.py[cod]
 
-# Build output: python -m build, make build
+# Virtual environment and lock file of the "WinJitsu: sync venv" task (uv sync)
+.venv/
+uv.lock
+
+# Build output: python -m build, make build, the smoke test's empty config dir (build/smoke-config)
 build/
 dist/
+*.egg-info/
+
+# Wheels from make build and packages from ./install-nightly.sh --no-install
 PKGs/
-src/*.egg-info/
 
 # Local clone of the AUR package, used by make aur
 AUR/
 
-# makepkg output when testing arch/PKGBUILD in place
+# makepkg output when testing arch/PKGBUILD in place (WinJitsu/ is its git source)
 arch/src/
 arch/pkg/
 arch/WinJitsu/
 arch/*.pkg.tar*
 
-# Editor settings: the shared VS Code setup lives in WinJitsu.code-workspace
+# PyCharm (the code carries # noinspection hints). The VS Code setup is shared: WinJitsu.code-workspace and .vscode/
 .idea/
-.vscode/

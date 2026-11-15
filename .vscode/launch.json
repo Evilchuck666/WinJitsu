@@ -1,0 +1,48 @@
+{
+  // PYTHONPATH points at src/, so these always run this checkout, never the copy installed by the AUR package.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // The daemon without forking, so breakpoints work; it logs to this terminal too. Its own runtime, cache and
+      // state directories keep its socket, undo history and log apart from the installed daemon's.
+      "name": "WinJitsu: daemon (foreground)",
+      "type": "debugpy",
+      "request": "launch",
+      "code": "from winjitsu.daemon import run_daemon; run_daemon()",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev",
+        "XDG_CACHE_HOME": "/tmp/winjitsu-dev/cache",
+        "XDG_STATE_HOME": "/tmp/winjitsu-dev/state"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      // Sends an action to the foreground daemon above (same XDG_RUNTIME_DIR).
+      "name": "WinJitsu: send action (dev daemon)",
+      "type": "debugpy",
+      "request": "launch",
+      "code": "from winjitsu.cli import main; main()",
+      "args": ["${input:action}"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ],
+  "inputs": [
+    {
+      // client.VALID_ACTIONS
+      "id": "action",
+      "type": "pickString",
+      "description": "Action to send to the dev daemon",
+      "options": ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"],
+      "default": "C"
+    }
+  ]
+}

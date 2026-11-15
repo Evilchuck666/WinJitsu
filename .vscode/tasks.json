@@ -1,0 +1,88 @@
+{
+  // Tasks run in the workspace folder. The Python ones use the interpreter selected in VS Code with PYTHONPATH
+  // pointing at src/, so they run this checkout, never the copy installed by the AUR package.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Creates or updates .venv (python-xlib, plus winjitsu itself in editable mode) for the editor and the Test Explorer.
+      "label": "WinJitsu: sync venv",
+      "type": "process",
+      "command": "uv",
+      "args": ["sync"],
+      "problemMatcher": []
+    },
+    {
+      // Same as `make test`.
+      "label": "WinJitsu: tests",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "unittest", "discover", "-s", "tests", "-v"],
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        }
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      // Same checks as the CI smoke test: --help, --see-config with an empty config dir, module imports.
+      "label": "WinJitsu: smoke test",
+      "type": "shell",
+      "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.client, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        }
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      // `make build`: the wheel goes to PKGs/.
+      "label": "WinJitsu: build wheel",
+      "type": "process",
+      "command": "make",
+      "args": ["build"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      // Replaces the running daemon (usually the installed one) with one running this checkout.
+      // Run "winjitsu --reload-daemon" from a regular terminal to go back to the installed version.
+      "label": "WinJitsu: reload daemon (dev code)",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-c", "from winjitsu.cli import main; main()", "--reload-daemon"],
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      // Arch only: replaces the installed winjitsu package with a pacman package built from this checkout
+      // (uncommitted changes included) and reloads the daemon. makepkg asks for the sudo password here.
+      "label": "WinJitsu: install nightly (Arch)",
+      "type": "process",
+      "command": "./install-nightly.sh",
+      "problemMatcher": []
+    },
+    {
+      // Arch only: builds the same package into PKGs/ without installing it.
+      "label": "WinJitsu: build nightly package (Arch)",
+      "type": "process",
+      "command": "./install-nightly.sh",
+      "args": ["--no-install"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
