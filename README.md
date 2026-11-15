@@ -42,7 +42,7 @@ Click the preview to watch the full-resolution video ([MP4](site/assets/screensh
 | --- | --- |
 | Arch Linux (AUR) | [winjitsu](https://aur.archlinux.org/packages/winjitsu) |
 | PyPI | [WinJitsu](https://pypi.org/project/WinJitsu/) |
-| GitHub release | [Wheel (v0.5.1)](https://github.com/Evilchuck666/WinJitsu/releases/download/v0.5.1/winjitsu-0.5.1-py3-none-any.whl) · [Source archive](https://github.com/Evilchuck666/WinJitsu/releases/download/v0.5.1/winjitsu-0.5.1.tar.gz) · [All downloads](https://github.com/Evilchuck666/WinJitsu/releases/latest) |
+| GitHub release | [Wheel (v0.5.2)](https://github.com/Evilchuck666/WinJitsu/releases/download/v0.5.2/winjitsu-0.5.2-py3-none-any.whl) · [Source archive](https://github.com/Evilchuck666/WinJitsu/releases/download/v0.5.2/winjitsu-0.5.2.tar.gz) · [All downloads](https://github.com/Evilchuck666/WinJitsu/releases/latest) |
 
 [Release notes](https://github.com/Evilchuck666/WinJitsu/releases/latest) · [SHA256SUMS.txt](https://github.com/Evilchuck666/WinJitsu/releases/latest/download/SHA256SUMS.txt)
 
