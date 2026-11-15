@@ -40,8 +40,7 @@ jobs:
           test -s site/index.html
           test -s site/styles.css
           test -f site/.nojekyll
-          test "$(find site -type f | wc -l)" -eq 7
-          test -s site/assets/screenshots/cli-help.png
+          test "$(find site -type f | wc -l)" -eq 6
           test -s site/assets/screenshots/winjitsu-demo.mp4
           test -s site/assets/screenshots/winjitsu-demo-poster.jpg
           test -s site/assets/screenshots/winjitsu-demo-preview.webp
