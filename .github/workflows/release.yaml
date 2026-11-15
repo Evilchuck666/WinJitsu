@@ -142,6 +142,15 @@ jobs:
             exit 1
           fi
 
+          # The README and the project page link the files of this release.
+          wheel_link="releases/download/v$VERSION/winjitsu-$VERSION-py3-none-any.whl"
+          for page in README.md site/index.html; do
+            if ! grep -Fq "$wheel_link" "$page"; then
+              echo "::error::$page doesn't link $wheel_link. Update its download links to $VERSION first."
+              exit 1
+            fi
+          done
+
           # An API failure must stop the release, so no "|| true" here.
           gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/" --jq '.[].ref' > tags.txt
           if grep -Fxq "refs/tags/v$VERSION" tags.txt; then

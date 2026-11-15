@@ -81,7 +81,9 @@ winjitsu ACTION → cli.main → client.send_command ──Unix socket──▶ 
 
 ## Release
 
-Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match. `.github/workflows/release.yaml` builds, smoke-tests and runs the unit tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
+Versions live in `pyproject.toml` (`version`) and `arch/PKGBUILD` (`pkgver`) and must match.
+
+**Bumping the version also means updating `README.md` and the project page (`site/index.html`), in the same commit.** Both link the files of a specific release (`releases/download/vX.Y.Z/winjitsu-X.Y.Z-py3-none-any.whl`, `winjitsu-X.Y.Z.tar.gz`): in `README.md` the "GitHub release" row of the Download table; in `site/index.html` the download list's `aria-label`, the wheel and source buttons with their `<small>` labels and `SHA256SUMS.txt`. Every `X.Y.Z` there must be the new version. The links work once the release exists, so run the release workflow right after pushing the bump (the push also redeploys the page). The release workflow refuses to publish if `README.md` or `site/index.html` don't link the wheel of the version being released. `.github/workflows/release.yaml` builds, smoke-tests and runs the unit tests on every run; on pushes and pull requests it only runs when the repository variable `WINJITSU_CI` is `true`. Running it manually with a version publishes the GitHub release, uploads to PyPI with Trusted Publishing (environment `pypi`) and copies `arch/PKGBUILD` to the `winjitsu` AUR package with `pkgrel=1` and a regenerated `.SRCINFO` (secret `AUR_SSH_PRIVATE_KEY`). `arch/PKGBUILD` is the source of truth for the AUR package:
 
 ```bash
 gh workflow run release.yaml -R Evilchuck666/WinJitsu -f version=X.Y.Z --ref main
