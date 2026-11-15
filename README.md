@@ -30,7 +30,8 @@ Click the preview to watch the full-resolution video ([MP4](site/assets/screensh
 -   **Smooth Animations**: Windows glide to their new positions instead of just jumping there. 🌬️
 -   **Grid Snapping**: Position windows easily to the North, South, East, West, corners, or center. 🧭
 -   **Multi-Monitor Support**: Move windows between displays with ease. 🖥️ ➡️ 🖥️
--   **Fullscreen Toggling**: Smart fullscreen with configurable padding, and restore to each window's home position. ↔️
+-   **Fullscreen Toggling**: Smart fullscreen with configurable padding. ↔️
+-   **Undo**: Every action can be undone, one step at a time, per window. 🔙
 -   **Background Daemon**: A small daemon answers hotkeys instantly and collapses key-repeat bursts into one action. ⚡
 -   **Config File**: Persist your preferences in `~/.config/winjitsu/config.ini`. ⚙️
 -   **CLI Overrides**: Override config values when starting the daemon — no file editing needed. 🎛️
@@ -123,12 +124,12 @@ winjitsu [ACTION] [OPTIONS]
 | `SW`   | Move to South-West                     | ↙️    |
 | `C`    | Center the window (keeps its size)     | 🎯    |
 | `F`    | Fullscreen (minus `padding`)           | 🖥️   |
-| `U`    | Restore the window's home position     | 🔙    |
-| `TF`   | Toggle fullscreen / home position      | 🔄    |
+| `U`    | Undo the last action on the window     | 🔙    |
+| `TF`   | Toggle fullscreen (leaving it undoes)  | 🔄    |
 | `TD`   | Move to the next monitor               | 📺    |
-| `CC`   | Clear the window state cache           | 🧹    |
+| `CC`   | Clear the undo history                 | 🧹    |
 
-The **home position** is where a window was before WinJitsu first moved it. It is kept per window in `~/.cache/winjitsu/state.db` (respects `$XDG_CACHE_HOME`) and reset whenever the daemon starts or you move the window yourself.
+**Undo** works per window: every action WinJitsu performs is stacked, and each `U` takes the window one step back, maximized again if it was. If you moved the window yourself since the last action, the first `U` puts it back where that action left it. The history is kept in `~/.cache/winjitsu/state.db` (respects `$XDG_CACHE_HOME`) and cleared whenever the daemon starts or you run `CC`.
 
 ### Binding keys
 

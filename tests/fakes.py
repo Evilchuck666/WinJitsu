@@ -23,8 +23,10 @@ class FakeWindowManager:
 
     WINDOW_ID = 4242
 
+    MAXIMIZED_STATES = ["_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"]
+
     def __init__(self, frame, extents=(0, 0, 0, 0), increments=(1, 1), base=(0, 0), wm_class="kitty",
-                 unmaximized_frame=None):
+                 unmaximized_frame=None, maximized_frame=(0, 0, 1920, 1080)):
         self.frame             = tuple(frame)
         self.extents           = extents
         self.increments        = increments
@@ -33,6 +35,7 @@ class FakeWindowManager:
         self.moves             = 0
         self.maximized         = unmaximized_frame is not None
         self.unmaximized_frame = unmaximized_frame
+        self.maximized_frame   = tuple(frame) if self.maximized else tuple(maximized_frame)
         self.closed            = False
         self.commands          = []  # arguments of every windowsize/windowmove run, without "xdotool"
 
@@ -63,11 +66,20 @@ class FakeWindowManager:
 
     def clear_blocking_states(self, window_id):
         if not self.maximized:
-            return False
+            return []
 
         self.maximized = False
         self.frame     = tuple(self.unmaximized_frame)
-        return True
+        return list(self.MAXIMIZED_STATES)
+
+    def restore_states(self, window_id, names):
+        if names:
+            self.user_maximizes()
+
+    def user_maximizes(self):
+        # Like a window manager: remember where the window was, fill the monitor.
+        self.maximized, self.unmaximized_frame = True, self.frame
+        self.frame = self.maximized_frame
 
     def check_output(self, args, **kwargs):
         command = args[1]
@@ -102,7 +114,9 @@ class FakeWindowManager:
             mock.patch.object(window, "subprocess",        fake_subprocess),
             mock.patch.object(window, "get_frame_extents", lambda window_id: self.extents),
             mock.patch.object(window, "_get_display",      lambda: fake_display),
-            mock.patch.object(window, "_clear_blocking_states", lambda window_id: self.clear_blocking_states(window_id)),
+            mock.patch.object(window,  "_clear_blocking_states", lambda window_id: self.clear_blocking_states(window_id)),
+            mock.patch.object(actions, "_clear_blocking_states", lambda window_id: self.clear_blocking_states(window_id)),
+            mock.patch.object(actions, "restore_states", lambda window_id, names: self.restore_states(window_id, names)),
         ]
 
 

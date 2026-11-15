@@ -1,7 +1,10 @@
 from .config import cfg
 from .screen import get_screens, get_screen_for_window, find_screen_for_window
-from .window import get_window_position, get_wm_class, move_window, geometry_of, geometry_matches
-from .cache  import load_state, clear_cache, _update_state, CACHE_ERRORS
+from .window import (
+    get_window_position, get_wm_class, move_window, geometry_of, geometry_matches,
+    restore_states, _clear_blocking_states, _settled_geometry,
+)
+from .cache  import push_entry, top_entry, pop_entry, clear_cache, CACHE_ERRORS
 from .client import VALID_ACTIONS  # noqa: F401  (re-exported, the list lives with the client)
 
 
@@ -11,16 +14,34 @@ DIRECTION_ACTIONS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"}
 # area; geometries and targets are (x, y, width, height) of the window frame.
 
 
-def _move_and_remember(window, target):
-    # Move first, then save where the window actually ended up, so later
-    # comparisons are made against what xdotool will report. The cache is an
-    # extra: if it fails, the window has still moved.
+def _move_and_push(window, target):
+    # Every action goes on the window's undo history: where it was before
+    # (with the window manager states it had), what was asked for and where
+    # it actually ended up, which is what xdotool will report later. The
+    # history is an extra: if it can't be saved, the window has still moved.
+    window_id = window["WINDOW"]
+    wm_class  = get_wm_class(window_id)
+
+    # A maximized window has to be released before it can move. The geometry
+    # the window manager gives back is the one to return to, maximized again,
+    # on undo.
+    states = _clear_blocking_states(window_id)
+    before = geometry_of(window)
+    if states:
+        before = _settled_geometry(window_id) or before
+
+    target  = tuple(int(round(value)) for value in target)
     reached = move_window(window, *target)
 
+    if reached is None or wm_class is None:
+        return None
+    if not states and geometry_matches(before, reached):
+        return None  # nothing changed: not worth an undo step
+
     try:
-        _update_state(window, target, reached)
+        push_entry(window_id, wm_class, before, states, target, reached)
     except CACHE_ERRORS as error:
-        return f"WARN: moved, but the window state could not be saved ({error})"
+        return f"WARN: moved, but the undo history could not be saved ({error})"
 
     return None
 
@@ -48,26 +69,26 @@ def _grid_targets(screen):
     }
 
 
-def _is_at(window, target, cached_state):
+def _is_at(window, target, last_action):
     """Whether the window is at the target, or still where moving it there left it.
 
     The geometry a move settles at can differ from the target (size
-    increments, window manager constraints), so the cached one counts too.
+    increments, window manager constraints), so the last action's counts too.
     """
     current = geometry_of(window)
 
     if (
-            cached_state is not None
-        and cached_state["_target"] == tuple(target)
-        and geometry_matches(current, cached_state["_reached"])
+            last_action is not None
+        and last_action["target"] == tuple(target)
+        and geometry_matches(current, last_action["reached"])
     ):
         return True
 
     return geometry_matches(current, target)
 
 
-def _cached_state(window):
-    return load_state(window["WINDOW"], get_wm_class(window["WINDOW"]))
+def _last_action(window):
+    return top_entry(window["WINDOW"], get_wm_class(window["WINDOW"]))
 
 
 # --- Grid snapping ---
@@ -85,7 +106,7 @@ def direction(direction_code):
     else:
         target = _grid_targets(screen)[direction_code]
 
-    return _move_and_remember(window, target)
+    return _move_and_push(window, target)
 
 
 # --- Fullscreen ---
@@ -93,28 +114,44 @@ def fullscreen(window=None, screen=None):
     window = window or get_window_position()
     screen = screen or get_screen_for_window(window)
 
-    return _move_and_remember(window, _grid_targets(screen)["F"])
-
-
-def restore(window=None):
-    window = window or get_window_position()
-
-    saved_state = _cached_state(window)
-    if saved_state is None:
-        return "WARN: no cached state for this window"
-
-    move_window(window, saved_state["X"], saved_state["Y"], saved_state["WIDTH"], saved_state["HEIGHT"])
-    return None
+    return _move_and_push(window, _grid_targets(screen)["F"])
 
 
 def toggle_fullscreen(window=None):
     window = window or get_window_position()
     screen = get_screen_for_window(window)
 
-    if _is_at(window, _grid_targets(screen)["F"], _cached_state(window)):
-        return restore(window)
+    # Leaving fullscreen is undoing the move that entered it.
+    if _is_at(window, _grid_targets(screen)["F"], _last_action(window)):
+        return undo(window)
 
     return fullscreen(window, screen)
+
+
+# --- Undo ---
+def undo(window=None):
+    window    = window or get_window_position()
+    window_id = window["WINDOW"]
+    wm_class  = get_wm_class(window_id)
+
+    last_action = top_entry(window_id, wm_class)
+    if last_action is None:
+        return "WARN: nothing to undo for this window"
+
+    # Moved or maximized by hand since the last action: undo that first, back
+    # to where the action left the window. The next undo undoes the action.
+    if not geometry_matches(geometry_of(window), last_action["reached"]):
+        move_window(window, *last_action["reached"])
+        return None
+
+    try:
+        pop_entry(window_id, wm_class)
+    except CACHE_ERRORS as error:
+        return f"WARN: the undo history could not be updated ({error})"
+
+    move_window(window, *last_action["before"])
+    restore_states(window_id, last_action["states"])
+    return None
 
 
 # --- Display ---
@@ -125,11 +162,11 @@ def _as_screen(screen_dict):
 def _target_on_next_screen(window, current_screen, next_screen):
     # A window at a grid position (halves, quarters, F) takes the same position
     # on the next screen, so it fits whatever that screen's size.
-    cached_state    = _cached_state(window)
+    last_action     = _last_action(window)
     current_targets = _grid_targets(current_screen)
 
     for code, target in current_targets.items():
-        if _is_at(window, target, cached_state):
+        if _is_at(window, target, last_action):
             return _grid_targets(next_screen)[code]
 
     # Anywhere else: same offset from the screen's corner and same size,
@@ -157,15 +194,14 @@ def toggle_display():
     current_screen = find_screen_for_window(window, (primary_screen, other_screens))
     next_screen    = all_screens[(all_screens.index(current_screen) + 1) % len(all_screens)]
 
-    # Saved like any other move, so U still returns to the home position.
     target = _target_on_next_screen(window, _as_screen(current_screen), _as_screen(next_screen))
-    return _move_and_remember(window, target)
+    return _move_and_push(window, target)
 
 
 # --- Dispatcher ---
 _ACTION_HANDLERS = {
     "F":  fullscreen,
-    "U":  restore,
+    "U":  undo,
     "TF": toggle_fullscreen,
     "TD": toggle_display,
     "CC": clear_cache,

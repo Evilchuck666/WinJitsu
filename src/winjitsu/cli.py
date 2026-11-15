@@ -22,14 +22,14 @@ actions:
 
   fullscreen:
     F               fullscreen (the monitor minus panels and padding)
-    U               restore window to its home position
-    TF              toggle fullscreen / restore home position
+    U               undo the last action on the window (repeat to go further back)
+    TF              toggle fullscreen (leaving it undoes the move into it)
 
   multi-monitor:
     TD              move window to the next monitor
 
   cache:
-    CC              clear the window state cache
+    CC              clear the undo history of every window
 
 config file: ~/.config/winjitsu/config.ini  (XDG_CONFIG_HOME honoured)
   --write-config    write the current settings (defaults, config file and flags) to it

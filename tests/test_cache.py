@@ -7,40 +7,15 @@ from unittest import mock
 from winjitsu import cache
 
 
-HOME   = {"WINDOW": "7", "X": 10, "Y": 20, "WIDTH": 300, "HEIGHT": 200, "SCREEN": 0}
-TARGET = (0, 0, 960, 1080)
+MAXIMIZED = ["_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"]
 
 
-def _cached(reached):
-    return {**HOME, "WM_CLASS": "kitty", "_target": TARGET, "_reached": reached}
+def _push(window_id, wm_class, step, states=()):
+    # An action whose geometries all derive from `step`, to tell entries apart.
+    cache.push_entry(window_id, wm_class, (step, 0, 300, 200), list(states), (step, 1, 960, 1080), (step, 2, 960, 1080))
 
 
-def _window(x, y, width, height):
-    return {"WINDOW": 7, "X": x, "Y": y, "WIDTH": width, "HEIGHT": height, "SCREEN": 0}
-
-
-class ResolveHomeTest(unittest.TestCase):
-    def test_without_cache_the_window_is_the_home(self):
-        window = _window(1, 2, 3, 4)
-        self.assertIs(cache._resolve_home(window, None), window)
-
-    def test_still_where_it_settled_keeps_the_home(self):
-        home = cache._resolve_home(_window(0, 24, 960, 1056), _cached((0, 24, 960, 1056)))
-        self.assertEqual((home["X"], home["Y"], home["WIDTH"], home["HEIGHT"]), (10, 20, 300, 200))
-
-    def test_small_differences_still_count_as_the_same_place(self):
-        home = cache._resolve_home(_window(1, 26, 959, 1056), _cached((0, 24, 960, 1056)))
-        self.assertEqual(home["X"], 10)
-
-    def test_moved_away_makes_the_current_geometry_the_home(self):
-        window = _window(500, 400, 960, 1056)
-        self.assertIs(cache._resolve_home(window, _cached((0, 24, 960, 1056))), window)
-
-    def test_without_a_settled_geometry_compares_with_the_target(self):
-        self.assertEqual(cache._resolve_home(_window(*TARGET), _cached(None))["X"], 10)
-
-
-class DatabaseTest(unittest.TestCase):
+class HistoryTest(unittest.TestCase):
     def setUp(self):
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
@@ -50,49 +25,80 @@ class DatabaseTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_save_and_load_round_trip(self):
         cache.init_db()
-        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
 
-        state = cache.load_state(7, "kitty")
-        self.assertEqual((state["X"], state["Y"], state["WIDTH"], state["HEIGHT"]), (10, 20, 300, 200))
-        self.assertEqual(state["_target"],  TARGET)
-        self.assertEqual(state["_reached"], (0, 24, 960, 1056))
-        self.assertIsNone(cache.load_state(7, "firefox"))
+    def test_last_in_first_out(self):
+        for step in (1, 2, 3):
+            _push(7, "kitty", step)
 
-    def test_save_recreates_a_removed_database(self):
-        cache.init_db()
+        self.assertEqual(cache.top_entry(7, "kitty")["before"], (3, 0, 300, 200))
+        self.assertEqual([cache.pop_entry(7, "kitty")["before"][0] for _ in range(3)], [3, 2, 1])
+        self.assertIsNone(cache.pop_entry(7, "kitty"))
+        self.assertIsNone(cache.top_entry(7, "kitty"))
+
+    def test_an_entry_keeps_every_field(self):
+        _push(7, "kitty", 5, states=MAXIMIZED)
+
+        entry = cache.top_entry(7, "kitty")
+        self.assertEqual(entry["before"],  (5, 0, 300, 200))
+        self.assertEqual(entry["states"],  MAXIMIZED)
+        self.assertEqual(entry["target"],  (5, 1, 960, 1080))
+        self.assertEqual(entry["reached"], (5, 2, 960, 1080))
+
+        _push(7, "kitty", 6)
+        self.assertEqual(cache.top_entry(7, "kitty")["states"], [])
+
+    def test_each_window_has_its_own_history(self):
+        _push(7, "kitty", 1)
+        _push(7, "firefox", 2)  # a reused window id with another class is another window
+        _push(8, "kitty", 3)
+
+        self.assertEqual(cache.pop_entry(7, "kitty")["before"][0], 1)
+        self.assertEqual(cache.top_entry(7, "firefox")["before"][0], 2)
+        self.assertEqual(cache.top_entry(8, "kitty")["before"][0], 3)
+        self.assertIsNone(cache.top_entry(7, None))
+
+    def test_clear_cache_empties_every_history(self):
+        _push(7, "kitty", 1)
+        _push(8, "kitty", 2)
+
+        cache.clear_cache()
+        self.assertIsNone(cache.top_entry(7, "kitty"))
+        self.assertIsNone(cache.top_entry(8, "kitty"))
+
+    def test_push_recreates_a_removed_database(self):
         self.db_path.unlink()
         self.db_path.parent.rmdir()
 
-        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
-        self.assertEqual(cache.load_state(7, "kitty")["_reached"], (0, 24, 960, 1056))
+        _push(7, "kitty", 1)
+        self.assertEqual(cache.top_entry(7, "kitty")["before"][0], 1)
 
-    def test_load_treats_a_broken_database_as_empty(self):
+    def test_a_broken_database_reads_as_empty_and_fails_writes(self):
         self.db_path.write_bytes(b"not a database " * 100)
-        self.assertIsNone(cache.load_state(7, "kitty"))
 
-    def test_a_table_from_an_older_version_is_replaced(self):
+        self.assertIsNone(cache.top_entry(7, "kitty"))
+        with self.assertRaises(cache.CACHE_ERRORS):
+            _push(7, "kitty", 1)
+        with self.assertRaises(cache.CACHE_ERRORS):
+            cache.pop_entry(7, "kitty")
+
+    def test_tables_of_older_versions_are_replaced(self):
+        self.db_path.unlink()
         with sqlite3.connect(self.db_path) as connection:
-            connection.execute(
-                "CREATE TABLE windows (id TEXT PRIMARY KEY, window_id TEXT NOT NULL, x INTEGER NOT NULL,"
-                " y INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,"
-                " screen INTEGER NOT NULL DEFAULT 0, wm_class TEXT NOT NULL, last_x INTEGER NOT NULL,"
-                " last_y INTEGER NOT NULL, last_w INTEGER NOT NULL, last_h INTEGER NOT NULL,"
-                " UNIQUE(window_id, wm_class))"
-            )
-            connection.execute("INSERT INTO windows VALUES ('id', '7', 10, 20, 300, 200, 0, 'kitty', 0, 0, 960, 1080)")
+            connection.execute("CREATE TABLE windows (window_id TEXT, wm_class TEXT, x INTEGER, y INTEGER)")
+            connection.execute("INSERT INTO windows VALUES ('7', 'kitty', 10, 20)")
+            connection.execute("PRAGMA user_version = 2")
 
         cache.init_db()
-        self.assertIsNone(cache.load_state(7, "kitty"))
 
         with sqlite3.connect(self.db_path) as connection:
-            columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
-        self.assertNotIn("id", columns)
-        self.assertNotIn("screen", columns)
+            tables  = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+        self.assertEqual((tables, version), ({"history"}, cache._SCHEMA_VERSION))
 
-        cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
-        self.assertEqual(cache.load_state(7, "kitty")["_reached"], (0, 24, 960, 1056))
+        _push(7, "kitty", 1)
+        self.assertEqual(cache.top_entry(7, "kitty")["before"][0], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
