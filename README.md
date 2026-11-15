@@ -16,11 +16,12 @@ on your screen with smooth animations, making your workflow feel more organic an
 🌐 **Website:** https://evilchuck666.github.io/WinJitsu/
 
 <!-- SCREENSHOTS:START -->
-## 📸 Screenshots
+## 🎬 Demo
 
-![WinJitsu — recorded-output](site/assets/screenshots/cli-help.png)
+[![WinJitsu demo: a terminal snaps to halves, quarters, the center, fullscreen and the next monitor, with each action subtitled](site/assets/screenshots/winjitsu-demo-preview.webp)](https://evilchuck666.github.io/WinJitsu/assets/screenshots/winjitsu-demo.mp4)
 
-WinJitsu's actual CLI help, rendered from recorded output. A desktop snapping demonstration is still pending because X11 access is unavailable here.
+Recorded on a two-monitor X11 desktop, with each action subtitled as it runs.
+Click the preview to watch the full-resolution video ([MP4](site/assets/screenshots/winjitsu-demo.mp4), 48 s).
 
 <!-- SCREENSHOTS:END -->
 
@@ -127,7 +128,7 @@ winjitsu [ACTION] [OPTIONS]
 | `TD`   | Move to the next monitor               | 📺    |
 | `CC`   | Clear the window state cache           | 🧹    |
 
-The **home position** is where a window was before WinJitsu first moved it. It is kept per window in `~/.cache/winjitsu/state.db` and reset whenever the daemon starts or you move the window yourself.
+The **home position** is where a window was before WinJitsu first moved it. It is kept per window in `~/.cache/winjitsu/state.db` (respects `$XDG_CACHE_HOME`) and reset whenever the daemon starts or you move the window yourself.
 
 ### Binding keys
 
