@@ -9,14 +9,22 @@ from .screen  import _get_display
 
 # Geometries are (x, y, width, height) of the window's outer frame, decorations
 # included. xdotool reports the client area but, following ICCCM, window
-# managers place the frame at the position passed to windowmove, so mixing the
-# two makes decorated windows drift and never match what WinJitsu saved.
+# managers place the frame at the position a ConfigureWindow request asks for
+# while the size is the client area's, so mixing the two makes decorated
+# windows drift and never match what WinJitsu saved.
+#
+# xdotool reads the active window, its geometry and class; the animation talks
+# to the X server directly, one ConfigureWindow request per frame.
 
 # Pixels two geometries may differ by and still count as the same position.
 GEOMETRY_TOLERANCE = 2
 
 _SETTLE_ATTEMPTS = 10
 _SETTLE_INTERVAL = 0.02
+
+# Seconds per animation step: cfg.steps steps last about steps × FRAME_INTERVAL
+# whatever the speed of the machine (25 steps ≈ 0.17 s).
+FRAME_INTERVAL = 1 / 144
 
 # Window managers ignore moves and resizes of windows in these states.
 _BLOCKING_STATES = ("_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_FULLSCREEN")
@@ -56,9 +64,16 @@ def get_frame_extents(window_id):
     return left, right, top, bottom
 
 
+def _xdotool(*args):
+    try:
+        return subprocess.check_output(["xdotool", *args], stderr=subprocess.DEVNULL).decode().strip()
+    except FileNotFoundError:
+        raise RuntimeError("xdotool is not installed or not in PATH.") from None
+
+
 def get_window_geometry(window_id):
     try:
-        geometry_output = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", str(window_id)]).decode()
+        geometry_output = _xdotool("getwindowgeometry", "--shell", str(window_id))
         window_geometry = {}
 
         for line in geometry_output.splitlines():
@@ -68,7 +83,7 @@ def get_window_geometry(window_id):
             key, value = line.split("=", 1)
             window_geometry[key] = int(value)
     except (subprocess.CalledProcessError, ValueError):
-        raise RuntimeError("Could not get window position. Is xdotool installed?")
+        raise RuntimeError(f"Could not read the geometry of window {window_id}; it may have closed.") from None
 
     frame = _client_to_frame(geometry_of(window_geometry), get_frame_extents(window_geometry["WINDOW"]))
     window_geometry["X"], window_geometry["Y"], window_geometry["WIDTH"], window_geometry["HEIGHT"] = frame
@@ -77,20 +92,33 @@ def get_window_geometry(window_id):
 
 def get_window_position():
     try:
-        window_id = subprocess.check_output(["xdotool", "getactivewindow"]).decode().strip()
+        window_id = _xdotool("getactivewindow")
     except subprocess.CalledProcessError:
-        raise RuntimeError("Could not get window position. Is xdotool installed?")
+        raise RuntimeError("No active window.") from None
 
     return get_window_geometry(window_id)
 
 
 def get_wm_class(window_id):
     try:
-        return subprocess.check_output(
-            ["xdotool", "getwindowclassname", str(window_id)]
-        ).decode().strip()
+        return _xdotool("getwindowclassname", str(window_id))
     except subprocess.CalledProcessError:
         return None
+
+
+def _ignore_x_error(*_args):
+    pass
+
+
+def _configure(window_id, x, y, client_width, client_height):
+    """Place the frame at (x, y) and size the client area, in a single request."""
+    display = _get_display()
+    window  = display.create_resource_object("window", int(window_id))
+
+    # Errors (the window closed meanwhile) arrive later and are ignored here:
+    # the geometry read after the animation reports them.
+    window.configure(x=x, y=y, width=client_width, height=client_height, onerror=_ignore_x_error)
+    display.flush()
 
 
 def _clear_blocking_states(window_id):
@@ -173,7 +201,6 @@ def move_window(window, target_x, target_y, target_width, target_height):
     target_x = max(0, min(target_x, display_width  - target_width))
     target_y = max(0, min(target_y, display_height - target_height))
 
-    window_id_str = str(window["WINDOW"])
     current_x, current_y, current_w, current_h = geometry_of(window)
 
     # Unmaximizing makes the window manager put the window back at its old
@@ -183,24 +210,31 @@ def move_window(window, target_x, target_y, target_width, target_height):
     _clear_blocking_states(window["WINDOW"])
     left, right, top, bottom = get_frame_extents(window["WINDOW"])
 
-    for step in range(1, cfg.steps + 1):
-        ease_factor    = _ease(step / cfg.steps)
+    steps   = max(1, cfg.steps)
+    started = time.monotonic()
+    step    = 0
+
+    while step < steps:
+        if FRAME_INTERVAL > 0:
+            # Running late (busy X server or window manager): jump to the step
+            # that is due, so the animation keeps its duration.
+            due_step = int((time.monotonic() - started) / FRAME_INTERVAL) + 1
+            step     = min(steps, max(step + 1, due_step))
+        else:
+            step += 1
+
+        ease_factor    = _ease(step / steps)
         interp_width   = current_w + (target_width  - current_w) * ease_factor
         interp_height  = current_h + (target_height - current_h) * ease_factor
         interp_x       = current_x + (target_x - current_x) * ease_factor
         interp_y       = current_y + (target_y - current_y) * ease_factor
 
-        # windowsize sets the client area; windowmove places the frame.
+        # The position is the frame's; the size is the client area's.
         client_width   = max(1, round(interp_width)  - left - right)
         client_height  = max(1, round(interp_height) - top  - bottom)
+        _configure(window["WINDOW"], round(interp_x), round(interp_y), client_width, client_height)
 
-        result = subprocess.run([
-            "xdotool",
-            "windowsize", window_id_str, str(client_width),   str(client_height),
-            "windowmove", window_id_str, str(round(interp_x)), str(round(interp_y)),
-        ])
-
-        if result.returncode != 0:
-            return None
+        if step < steps and FRAME_INTERVAL > 0:
+            time.sleep(max(0.0, started + step * FRAME_INTERVAL - time.monotonic()))
 
     return _settled_geometry(window["WINDOW"])

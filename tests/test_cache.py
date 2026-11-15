@@ -72,27 +72,27 @@ class DatabaseTest(unittest.TestCase):
         self.db_path.write_bytes(b"not a database " * 100)
         self.assertIsNone(cache.load_state(7, "kitty"))
 
-    def test_init_db_adds_the_new_columns_to_an_old_database(self):
-        old_schema = cache._CREATE_TABLE.replace(
-            "    reached_x  INTEGER,\n    reached_y  INTEGER,\n    reached_w  INTEGER,\n    reached_h  INTEGER,\n", ""
-        )
-        self.assertNotIn("reached_x", old_schema)
-
+    def test_a_table_from_an_older_version_is_replaced(self):
         with sqlite3.connect(self.db_path) as connection:
-            connection.execute(old_schema)
             connection.execute(
-                "INSERT INTO windows VALUES ('id', '7', 10, 20, 300, 200, 0, 'kitty', 0, 0, 960, 1080)"
+                "CREATE TABLE windows (id TEXT PRIMARY KEY, window_id TEXT NOT NULL, x INTEGER NOT NULL,"
+                " y INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,"
+                " screen INTEGER NOT NULL DEFAULT 0, wm_class TEXT NOT NULL, last_x INTEGER NOT NULL,"
+                " last_y INTEGER NOT NULL, last_w INTEGER NOT NULL, last_h INTEGER NOT NULL,"
+                " UNIQUE(window_id, wm_class))"
             )
+            connection.execute("INSERT INTO windows VALUES ('id', '7', 10, 20, 300, 200, 0, 'kitty', 0, 0, 960, 1080)")
 
         cache.init_db()
+        self.assertIsNone(cache.load_state(7, "kitty"))
 
-        state = cache.load_state(7, "kitty")
-        self.assertEqual(state["_target"], TARGET)
-        self.assertIsNone(state["_reached"])
+        with sqlite3.connect(self.db_path) as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
+        self.assertNotIn("id", columns)
+        self.assertNotIn("screen", columns)
 
         cache.save_state(7, HOME, TARGET, (0, 24, 960, 1056), "kitty")
         self.assertEqual(cache.load_state(7, "kitty")["_reached"], (0, 24, 960, 1056))
-
 
 if __name__ == "__main__":
     unittest.main()

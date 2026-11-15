@@ -1,23 +1,21 @@
 import sqlite3
-from pathlib import Path
-from uuid    import uuid4
+from .config import _xdg_dir
 from .window import get_wm_class, geometry_of, geometry_matches
 
 
-DB_PATH = Path.home() / ".cache" / "winjitsu" / "state.db"
+DB_PATH = _xdg_dir("XDG_CACHE_HOME", ".cache") / "winjitsu" / "state.db"
 
-# last_*: the target WinJitsu asked for. reached_*: the frame geometry the
-# window actually settled at, which is what later reads of the window return.
+# x, y, width, height: the home geometry. last_*: the target WinJitsu asked
+# for. reached_*: the frame geometry the window actually settled at, which is
+# what later reads of the window return.
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS windows (
-    id         TEXT    PRIMARY KEY,
     window_id  TEXT    NOT NULL,
+    wm_class   TEXT    NOT NULL,
     x          INTEGER NOT NULL,
     y          INTEGER NOT NULL,
     width      INTEGER NOT NULL,
     height     INTEGER NOT NULL,
-    screen     INTEGER NOT NULL DEFAULT 0,
-    wm_class   TEXT    NOT NULL,
     last_x     INTEGER NOT NULL,
     last_y     INTEGER NOT NULL,
     last_w     INTEGER NOT NULL,
@@ -26,11 +24,13 @@ CREATE TABLE IF NOT EXISTS windows (
     reached_y  INTEGER,
     reached_w  INTEGER,
     reached_h  INTEGER,
-    UNIQUE(window_id, wm_class)
+    PRIMARY KEY (window_id, wm_class)
 )
 """
 
-_REACHED_COLUMNS = ("reached_x", "reached_y", "reached_w", "reached_h")
+# Stored in PRAGMA user_version; bump it whenever the table changes. The cache
+# is emptied on every daemon start anyway, so an outdated table is dropped.
+_SCHEMA_VERSION = 2
 
 # What a broken or vanished cache raises. The cache is an extra: callers turn
 # these into warnings instead of failing the action.
@@ -42,14 +42,12 @@ def _connect():
     # e.g. ~/.cache was cleared while the daemon was running.
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
+
+    if connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION:
+        connection.execute("DROP TABLE IF EXISTS windows")
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+
     connection.execute(_CREATE_TABLE)
-
-    # Databases created by older versions lack the reached_* columns.
-    existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(windows)")}
-    for column in _REACHED_COLUMNS:
-        if column not in existing_columns:
-            connection.execute(f"ALTER TABLE windows ADD COLUMN {column} INTEGER")
-
     return connection
 
 
@@ -88,8 +86,6 @@ def load_state(window_id, wm_class):
         "Y":        row["y"],
         "WIDTH":    row["width"],
         "HEIGHT":   row["height"],
-        "SCREEN":   row["screen"],
-        "WM_CLASS": row["wm_class"],
         "_target":  (row["last_x"], row["last_y"], row["last_w"], row["last_h"]),
         "_reached": None if None in reached else reached,
     }
@@ -106,26 +102,23 @@ def save_state(window_id, home_state, target, reached, wm_class):
         connection.execute(
             """
             INSERT INTO windows
-                (id, window_id, x, y, width, height, screen, wm_class,
+                (window_id, wm_class, x, y, width, height,
                  last_x, last_y, last_w, last_h,
                  reached_x, reached_y, reached_w, reached_h)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(window_id, wm_class) DO UPDATE SET
                 x=excluded.x,         y=excluded.y,
                 width=excluded.width, height=excluded.height,
-                screen=excluded.screen,
                 last_x=excluded.last_x, last_y=excluded.last_y,
                 last_w=excluded.last_w, last_h=excluded.last_h,
                 reached_x=excluded.reached_x, reached_y=excluded.reached_y,
                 reached_w=excluded.reached_w, reached_h=excluded.reached_h
             """,
             (
-                str(uuid4()),
                 window_id,
+                wm_class,
                 home_state["X"],     home_state["Y"],
                 home_state["WIDTH"], home_state["HEIGHT"],
-                home_state.get("SCREEN", 0),
-                wm_class,
                 *target,
                 *reached,
             )
@@ -142,7 +135,7 @@ def _resolve_home(window, cached_state):
     left_at = cached_state["_reached"] or cached_state["_target"]
 
     if geometry_matches(geometry_of(window), left_at):
-        return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT", "SCREEN")}
+        return {k: cached_state[k] for k in ("WINDOW", "X", "Y", "WIDTH", "HEIGHT")}
 
     return window
 

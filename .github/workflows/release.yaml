@@ -78,7 +78,7 @@ jobs:
             "venv-$py/bin/pip" install dist/*.whl
             "venv-$py/bin/winjitsu" --help > /dev/null
             XDG_CONFIG_HOME="$RUNNER_TEMP/config-$py" "venv-$py/bin/winjitsu" --see-config
-            "venv-$py/bin/python" -c "import winjitsu.actions, winjitsu.cache, winjitsu.daemon, winjitsu.screen, winjitsu.window"
+            "venv-$py/bin/python" -c "import winjitsu.actions, winjitsu.cache, winjitsu.client, winjitsu.daemon, winjitsu.screen, winjitsu.window"
             echo "::endgroup::"
           done
 

@@ -21,11 +21,13 @@ winjitsu --read-config PATH # 📂 Use a different config file for this run
 
 ### Available Options
 
-| Flag            | Config key          | Default | Description                                           |
-|:----------------|:--------------------|:--------|:------------------------------------------------------|
-| `--steps N`     | `[animation] steps` | `25`    | Animation steps — higher is smoother but slower 🎞️   |
-| `--padding PX`  | `[display] padding` | `0`     | Gap in pixels around the window when fullscreening 📐 |
-| `--delay-ms MS` | `[daemon] delay_ms` | `250`   | Delay in ms before an action fires in daemon mode ⏱️  |
+| Flag            | Config key          | Range  | Default | Description                                                       |
+|:----------------|:--------------------|:-------|:--------|:------------------------------------------------------------------|
+| `--steps N`     | `[animation] steps` | 1–1000 | `25`    | Animation steps of about 7 ms — higher is smoother but slower 🎞️ |
+| `--padding PX`  | `[display] padding` | 0–500  | `0`     | Gap in pixels around the window when fullscreening 📐             |
+| `--delay-ms MS` | `[daemon] delay_ms` | 0–5000 | `250`   | How long the daemon waits for a burst of key presses to end ⏱️    |
+
+A value outside its range is rejected on the command line; in the config file it falls back to its default with a warning, without affecting the other options.
 
 ### Examples
 
@@ -44,7 +46,9 @@ winjitsu --daemon           # Start the daemon in the background
 winjitsu --reload-daemon    # Restart the daemon 🔄
 ```
 
-When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The daemon waits a short delay (configurable with `--delay-ms`) and only runs the last action of a rapid burst, so key repeat collapses into a single, clean move. ✨
+When the daemon is running, any `winjitsu [ACTION]` command is sent to it over a Unix socket. The first action runs right away; actions that follow within a short delay (configurable with `--delay-ms`) form a burst, and only its last one runs once the burst is over — not at all if it repeats the first, so holding a key down still makes a single, clean move. ✨
+
+The daemon writes its log to `~/.local/state/winjitsu/daemon.log` (respects `$XDG_STATE_HOME`); `winjitsu --see-config` shows the path.
 
 > 💡 **Tip:** Start the daemon on login and bind your hotkeys to `winjitsu [ACTION]` — you'll barely notice the tool is even there.
 

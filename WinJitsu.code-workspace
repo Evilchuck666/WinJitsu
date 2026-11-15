@@ -47,8 +47,8 @@
     "version": "0.2.0",
     "configurations": [
       {
-        // Runs the daemon without forking so breakpoints work. Its own XDG_RUNTIME_DIR keeps it from clashing
-        // with the installed daemon. The window state DB in ~/.cache is still shared and gets cleared on start.
+        // Runs the daemon without forking so breakpoints work, logging to this console too. Its own runtime,
+        // cache and state directories keep its socket, window state DB and log apart from the installed daemon.
         "name": "WinJitsu: daemon (foreground)",
         "type": "debugpy",
         "request": "launch",
@@ -56,7 +56,9 @@
         "cwd": "${workspaceFolder:WinJitsu}",
         "env": {
           "PYTHONPATH": "${workspaceFolder:WinJitsu}/src",
-          "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev"
+          "XDG_RUNTIME_DIR": "/tmp/winjitsu-dev",
+          "XDG_CACHE_HOME": "/tmp/winjitsu-dev/cache",
+          "XDG_STATE_HOME": "/tmp/winjitsu-dev/state"
         },
         "console": "integratedTerminal",
         "justMyCode": true
@@ -144,7 +146,7 @@
         // Same checks as the CI smoke test: --help, --see-config with an empty config dir, module imports.
         "label": "WinJitsu: smoke test",
         "type": "shell",
-        "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
+        "command": "py='${command:python.interpreterPath}' && \"$py\" -c 'from winjitsu.cli import main; main()' --help > /dev/null && XDG_CONFIG_HOME=build/smoke-config \"$py\" -c 'from winjitsu.cli import main; main()' --see-config && \"$py\" -c 'import winjitsu.actions, winjitsu.cache, winjitsu.client, winjitsu.daemon, winjitsu.screen, winjitsu.window' && echo 'Smoke test OK'",
         "options": {
           "cwd": "${workspaceFolder:WinJitsu}",
           "env": {

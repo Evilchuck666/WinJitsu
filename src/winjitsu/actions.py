@@ -2,9 +2,9 @@ from .config import cfg
 from .screen import get_screens, get_screen_for_window, find_screen_for_window
 from .window import get_window_position, get_wm_class, move_window, geometry_of, geometry_matches
 from .cache  import load_state, clear_cache, _update_state, CACHE_ERRORS
+from .client import VALID_ACTIONS  # noqa: F401  (re-exported, the list lives with the client)
 
 
-VALID_ACTIONS = ["N", "S", "E", "W", "NE", "NW", "SE", "SW", "C", "F", "U", "TF", "TD", "CC"]
 DIRECTION_ACTIONS = {"N", "S", "E", "W", "NE", "NW", "SE", "SW", "C"}
 
 # Screens are (width, height, origin_x, origin_y) tuples of a monitor's usable

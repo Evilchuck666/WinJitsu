@@ -1,11 +1,23 @@
 import os
+import sys
 import configparser
 from dataclasses import dataclass
 from pathlib     import Path
 
 
-_CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "winjitsu" / "config.ini"
+def _xdg_dir(variable, default_under_home):
+    # XDG base directories: an unset or empty variable means the default.
+    return Path(os.environ.get(variable) or Path.home() / default_under_home)
 
+
+_CONFIG_PATH = _xdg_dir("XDG_CONFIG_HOME", ".config") / "winjitsu" / "config.ini"
+
+# option: (section, default, minimum, maximum)
+OPTIONS = {
+    "steps":    ("animation", 25,  1, 1000),
+    "padding":  ("display",   0,   0, 500),
+    "delay_ms": ("daemon",    250, 0, 5000),
+}
 
 
 @dataclass
@@ -16,29 +28,48 @@ class _Config:
     path:     Path
 
 
-def _load_config(path=None):
-    ini_parser = configparser.ConfigParser()
-
-    ini_parser.read_dict({
-        "animation": {"steps": "25"},
-        "display":   {"padding": "0"},
-        "daemon":    {"delay_ms": "250"},
-    })
-
-    config_path = path or _CONFIG_PATH
-    ini_parser.read(config_path)
+def validate(option, value):
+    """The value as a whole number inside the option's range, or ValueError saying why not."""
+    _section, _default, minimum, maximum = OPTIONS[option]
 
     try:
-        return _Config(
-            steps=ini_parser.getint("animation", "steps"),
-            padding=ini_parser.getint("display", "padding"),
-            delay_ms=ini_parser.getint("daemon", "delay_ms"),
-            path=config_path,
-        )
-    except (ValueError, configparser.Error) as e:
-        import sys
-        print(f"Warning: invalid config value ({e}), using defaults.", file=sys.stderr)
-        return _Config(steps=25, padding=0, delay_ms=250, path=config_path)
+        number = int(str(value).strip())
+    except ValueError:
+        raise ValueError(f"{option} must be a whole number, got {value!r}") from None
+
+    if not minimum <= number <= maximum:
+        raise ValueError(f"{option} must be between {minimum} and {maximum}, got {number}")
+
+    return number
+
+
+def _load_config(path=None):
+    config_path = path or _CONFIG_PATH
+    ini_parser  = configparser.ConfigParser()
+
+    try:
+        ini_parser.read(config_path)
+    except configparser.Error as error:
+        print(f"Warning: could not read {config_path} ({error}), using the defaults.", file=sys.stderr)
+        ini_parser = configparser.ConfigParser()
+
+    # Each option falls back to its default on its own, so one bad value
+    # doesn't discard the others.
+    values = {}
+    for option, (section, default, _minimum, _maximum) in OPTIONS.items():
+        raw_value = ini_parser.get(section, option, fallback=None)
+
+        if raw_value is None:
+            values[option] = default
+            continue
+
+        try:
+            values[option] = validate(option, raw_value)
+        except ValueError as error:
+            print(f"Warning: {error} in {config_path}, using the default ({default}).", file=sys.stderr)
+            values[option] = default
+
+    return _Config(path=config_path, **values)
 
 
 def _write_config(config_path, active_config):
@@ -50,23 +81,23 @@ def _write_config(config_path, active_config):
             return
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     content = f"""\
 # WinJitsu configuration
 
 [animation]
-# Steps in the window movement animation.
-# Higher = smoother but slower. Default: 25
+# Steps in the window movement animation, about 7 ms each.
+# Higher = smoother but slower. 1-1000, default: 25
 steps = {active_config.steps}
 
 [display]
 # Gap in pixels around the window when using F (fullscreen).
-# 0 = true fullscreen, 5 = small gap on all sides. Default: 0
+# 0 = true fullscreen, 5 = small gap on all sides. 0-500, default: 0
 padding = {active_config.padding}
 
 [daemon]
-# Delay in milliseconds. Rapid actions within this window are
-# collapsed into one — only the last one fires. Default: 250
+# Delay in milliseconds. The first action runs at once; the ones that follow
+# within this delay are collapsed and only the last one fires. 0-5000, default: 250
 delay_ms = {active_config.delay_ms}
 """
 

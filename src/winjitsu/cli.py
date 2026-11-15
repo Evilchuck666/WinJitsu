@@ -4,9 +4,11 @@ import argparse
 import signal
 import time
 from pathlib  import Path
-from .config  import _load_config, _write_config
-from .actions import VALID_ACTIONS
-from .daemon  import _fork_daemon, send_command, PID_PATH
+from .config  import _load_config, _write_config, validate
+from .client  import VALID_ACTIONS, LOG_PATH, send_command, running_daemon_pid
+
+# daemon.py (and python-xlib with it) is imported only by --daemon and
+# --reload-daemon, so sending an action from a hotkey starts fast.
 
 
 _HELP_EPILOG = """
@@ -19,7 +21,7 @@ actions:
     C               center window (keeps current size)
 
   fullscreen:
-    F               fullscreen (covers the entire monitor)
+    F               fullscreen (the monitor minus panels and padding)
     U               restore window to its home position
     TF              toggle fullscreen / restore home position
 
@@ -30,10 +32,30 @@ actions:
     CC              clear the window state cache
 
 config file: ~/.config/winjitsu/config.ini  (XDG_CONFIG_HOME honoured)
-  --write-config    create config file with defaults (all options commented out)
+  --write-config    write the current settings (defaults, config file and flags) to it
   --read-config     use a different config file path
   --see-config      show active config file and current values
 """
+
+
+def _option_type(option):
+    def parse(value):
+        try:
+            return validate(option, value)
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(str(error)) from None
+
+    return parse
+
+
+def _wait_for_daemon_exit(timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if running_daemon_pid() is None:
+            return True
+        time.sleep(0.1)
+
+    return False
 
 
 def main():
@@ -60,12 +82,12 @@ def main():
     parser.add_argument("action", nargs="?", choices=VALID_ACTIONS, metavar="ACTION", help="window management action (see below)")
     parser.add_argument("--daemon",         action="store_true",                      help="start background daemon")
     parser.add_argument("--reload-daemon",  action="store_true",                      help="restart the background daemon")
-    parser.add_argument("--write-config",   action="store_true",                      help="create config file with defaults and exit")
+    parser.add_argument("--write-config",   action="store_true",                      help="write the current settings to the config file and exit")
     parser.add_argument("--read-config",    metavar="PATH",                           help="use a custom config file path")
     parser.add_argument("--see-config",     action="store_true",                      help="print current config values and exit")
-    parser.add_argument("--steps",          type=int, metavar="N",                    help="animation steps for --daemon, overrides config (default: 25)")
-    parser.add_argument("--padding",        type=int, metavar="PX",                   help="fullscreen padding in pixels for --daemon, overrides config (default: 0)")
-    parser.add_argument("--delay-ms",       type=int, metavar="MS",                   help="debounce delay in milliseconds for --daemon, overrides config (default: 250)")
+    parser.add_argument("--steps",    type=_option_type("steps"),    metavar="N",  help="animation steps of about 7 ms for --daemon, overrides config (1-1000, default: 25)")
+    parser.add_argument("--padding",  type=_option_type("padding"),  metavar="PX", help="fullscreen padding in pixels for --daemon, overrides config (0-500, default: 0)")
+    parser.add_argument("--delay-ms", type=_option_type("delay_ms"), metavar="MS", help="debounce delay in milliseconds for --daemon, overrides config (0-5000, default: 250)")
     parsed_args = parser.parse_args()
 
     config = _config_module.cfg
@@ -90,39 +112,36 @@ def main():
         print(f"steps       : {config.steps}")
         print(f"padding     : {config.padding}")
         print(f"delay_ms    : {config.delay_ms}")
+        print(f"daemon log  : {LOG_PATH}")
         return
 
     if parsed_args.daemon:
+        from .daemon import _fork_daemon
         _fork_daemon()
         return
 
     if parsed_args.reload_daemon:
-        if not PID_PATH.exists():
+        from .daemon import _fork_daemon
+
+        # Only a PID confirmed to be the daemon gets the signal, never a stale
+        # PID reused by another process.
+        old_pid = running_daemon_pid()
+        if old_pid is None:
             print("No daemon running.", file=sys.stderr)
             sys.exit(1)
 
         try:
-            old_pid = int(PID_PATH.read_text().strip())
             os.kill(old_pid, signal.SIGTERM)
-        except (ValueError, ProcessLookupError):
-            print("No daemon running (stale PID file).", file=sys.stderr)
-            PID_PATH.unlink(missing_ok=True)
-            sys.exit(1)
+        except ProcessLookupError:
+            pass  # it stopped in the meantime
         except PermissionError:
             print("Permission denied sending SIGTERM.", file=sys.stderr)
             sys.exit(1)
 
-        for _ in range(50):  # poll up to 5 s (50 × 0.1 s)
-            try:
-                os.kill(old_pid, 0)  # signal 0: liveness check, no signal sent
-                time.sleep(0.1)
-            except ProcessLookupError:
-                break
-        else:
-            # loop completed without break — daemon did not stop in time
+        if not _wait_for_daemon_exit():
             print("Daemon did not stop within 5 seconds.", file=sys.stderr)
             sys.exit(1)
-            
+
         _fork_daemon()
         return
 

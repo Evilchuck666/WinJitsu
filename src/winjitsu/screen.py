@@ -21,6 +21,19 @@ def _get_display() -> xdisplay.Display:
     return _display
 
 
+def reset_display():
+    """Forget the X connection, e.g. after the server closed it; the next use opens a new one."""
+    global _display
+
+    with _display_lock:
+        if _display is not None:
+            try:
+                _display.close()
+            except Exception:
+                pass  # already broken
+        _display = None
+
+
 def get_screens():
     """(primary, others): the usable area of each active monitor, minus the space panels reserve."""
     display = _get_display()
