@@ -9,22 +9,15 @@ from .screen  import _get_display
 
 # Geometries are (x, y, width, height) of the window's outer frame, decorations
 # included. xdotool reports the client area but, following ICCCM, window
-# managers place the frame at the position a ConfigureWindow request asks for
-# while the size is the client area's, so mixing the two makes decorated
-# windows drift and never match what WinJitsu saved.
-#
-# xdotool reads the active window, its geometry and class; the animation talks
-# to the X server directly, one ConfigureWindow request per frame.
+# managers place the frame at the position passed to windowmove, while
+# windowsize sets the client area, so mixing the two makes decorated windows
+# drift and never match what WinJitsu saved.
 
 # Pixels two geometries may differ by and still count as the same position.
 GEOMETRY_TOLERANCE = 2
 
 _SETTLE_ATTEMPTS = 10
 _SETTLE_INTERVAL = 0.02
-
-# Seconds per animation step: cfg.steps steps last about steps × FRAME_INTERVAL
-# whatever the speed of the machine (25 steps ≈ 0.17 s).
-FRAME_INTERVAL = 1 / 144
 
 # Window managers ignore moves and resizes of windows in these states.
 _BLOCKING_STATES = ("_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_FULLSCREEN")
@@ -104,21 +97,6 @@ def get_wm_class(window_id):
         return _xdotool("getwindowclassname", str(window_id))
     except subprocess.CalledProcessError:
         return None
-
-
-def _ignore_x_error(*_args):
-    pass
-
-
-def _configure(window_id, x, y, client_width, client_height):
-    """Place the frame at (x, y) and size the client area, in a single request."""
-    display = _get_display()
-    window  = display.create_resource_object("window", int(window_id))
-
-    # Errors (the window closed meanwhile) arrive later and are ignored here:
-    # the geometry read after the animation reports them.
-    window.configure(x=x, y=y, width=client_width, height=client_height, onerror=_ignore_x_error)
-    display.flush()
 
 
 def _clear_blocking_states(window_id):
@@ -210,31 +188,34 @@ def move_window(window, target_x, target_y, target_width, target_height):
     _clear_blocking_states(window["WINDOW"])
     left, right, top, bottom = get_frame_extents(window["WINDOW"])
 
-    steps   = max(1, cfg.steps)
-    started = time.monotonic()
-    step    = 0
+    window_id_str = str(window["WINDOW"])
+    steps         = max(1, cfg.steps)
 
-    while step < steps:
-        if FRAME_INTERVAL > 0:
-            # Running late (busy X server or window manager): jump to the step
-            # that is due, so the animation keeps its duration.
-            due_step = int((time.monotonic() - started) / FRAME_INTERVAL) + 1
-            step     = min(steps, max(step + 1, due_step))
-        else:
-            step += 1
-
+    # Every step is shown, each one an xdotool run. xdotool waits for the X
+    # server before it exits, so the animation goes as fast as the system keeps
+    # up with: smooth, with a duration that grows under load. A fixed clock that
+    # skips steps to keep the duration made it visibly jerky.
+    for step in range(1, steps + 1):
         ease_factor    = _ease(step / steps)
         interp_width   = current_w + (target_width  - current_w) * ease_factor
         interp_height  = current_h + (target_height - current_h) * ease_factor
         interp_x       = current_x + (target_x - current_x) * ease_factor
         interp_y       = current_y + (target_y - current_y) * ease_factor
 
-        # The position is the frame's; the size is the client area's.
+        # windowsize sets the client area; windowmove places the frame.
         client_width   = max(1, round(interp_width)  - left - right)
         client_height  = max(1, round(interp_height) - top  - bottom)
-        _configure(window["WINDOW"], round(interp_x), round(interp_y), client_width, client_height)
 
-        if step < steps and FRAME_INTERVAL > 0:
-            time.sleep(max(0.0, started + step * FRAME_INTERVAL - time.monotonic()))
+        try:
+            result = subprocess.run([
+                "xdotool",
+                "windowsize", window_id_str, str(client_width),     str(client_height),
+                "windowmove", window_id_str, str(round(interp_x)), str(round(interp_y)),
+            ], stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise RuntimeError("xdotool is not installed or not in PATH.") from None
+
+        if result.returncode != 0:
+            return None  # the window is gone
 
     return _settled_geometry(window["WINDOW"])

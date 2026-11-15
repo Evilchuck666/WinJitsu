@@ -1,4 +1,4 @@
-"""A fake X11 session for the tests: xdotool, X requests and one window managed by an ICCCM window manager."""
+"""A fake X11 session for the tests: xdotool and one window managed by an ICCCM window manager."""
 import subprocess
 import tempfile
 import unittest
@@ -11,14 +11,14 @@ from winjitsu import actions, cache, config, screen, window
 
 
 class FakeWindowManager:
-    """Answers the xdotool calls and X requests WinJitsu makes for a single window.
+    """Answers the xdotool calls WinJitsu makes for a single window.
 
-    Like a real reparenting window manager, a ConfigureWindow request places
-    the outer frame and sizes the client area, and getwindowgeometry reports
-    the client area. Resize increments emulate terminals that only take whole
-    cells. A maximized window ignores moves, like real window managers do,
-    until WinJitsu drops the state; it then goes back to its unmaximized frame.
-    A closed window can't be read any more.
+    Like a real reparenting window manager, windowmove places the outer frame,
+    windowsize sets the client area and getwindowgeometry reports the client
+    area. Resize increments emulate terminals that only take whole cells. A
+    maximized window ignores moves, like real window managers do, until
+    WinJitsu drops the state; it then goes back to its unmaximized frame. Once
+    closed, the window can't be moved or read any more.
     """
 
     WINDOW_ID = 4242
@@ -34,7 +34,7 @@ class FakeWindowManager:
         self.maximized         = unmaximized_frame is not None
         self.unmaximized_frame = unmaximized_frame
         self.closed            = False
-        self.configures        = []  # (x, y, client_width, client_height) of every request
+        self.commands          = []  # arguments of every windowsize/windowmove run, without "xdotool"
 
     def client(self):
         left, right, top, bottom = self.extents
@@ -45,16 +45,21 @@ class FakeWindowManager:
         (increment_w, increment_h), (base_w, base_h) = self.increments, self.base
         return width - (width - base_w) % increment_w, height - (height - base_h) % increment_h
 
-    def configure(self, window_id, x, y, client_width, client_height):
-        assert window_id == self.WINDOW_ID or str(window_id) == str(self.WINDOW_ID), window_id
-        self.configures.append((x, y, client_width, client_height))
-        if self.maximized or self.closed:
-            return  # ignored by the window manager / the window is gone
+    def run(self, args, **kwargs):
+        assert args[0] == "xdotool" and args[1] == "windowsize" and args[5] == "windowmove", args
+        assert args[2] == args[6] == str(self.WINDOW_ID), args
+        self.commands.append(list(args[1:]))
 
-        client_width, client_height = self._apply_increments(client_width, client_height)
+        if self.closed:
+            return subprocess.CompletedProcess(args, 1)  # xdotool fails on a window that is gone
+        if self.maximized:
+            return subprocess.CompletedProcess(args, 0)  # ignored by the window manager, not an error
+
+        client_width, client_height = self._apply_increments(int(args[3]), int(args[4]))
         left, right, top, bottom    = self.extents
-        self.frame = (x, y, client_width + left + right, client_height + top + bottom)
+        self.frame = (int(args[7]), int(args[8]), client_width + left + right, client_height + top + bottom)
         self.moves += 1
+        return subprocess.CompletedProcess(args, 0)
 
     def clear_blocking_states(self, window_id):
         if not self.maximized:
@@ -84,6 +89,7 @@ class FakeWindowManager:
     def patches(self, display_size):
         # Looked up on every call, so a test can replace methods afterwards.
         fake_subprocess = SimpleNamespace(
+            run=lambda args, **kwargs: self.run(args, **kwargs),
             check_output=lambda args, **kwargs: self.check_output(args, **kwargs),
             CalledProcessError=subprocess.CalledProcessError,
             DEVNULL=subprocess.DEVNULL,
@@ -97,7 +103,6 @@ class FakeWindowManager:
             mock.patch.object(window, "get_frame_extents", lambda window_id: self.extents),
             mock.patch.object(window, "_get_display",      lambda: fake_display),
             mock.patch.object(window, "_clear_blocking_states", lambda window_id: self.clear_blocking_states(window_id)),
-            mock.patch.object(window, "_configure", lambda *args: self.configure(*args)),
         ]
 
 
@@ -117,7 +122,6 @@ class FakeSessionTestCase(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(config.cfg, "steps",   5))
         self.stack.enter_context(mock.patch.object(config.cfg, "padding", 0))
         self.stack.enter_context(mock.patch.object(window, "_SETTLE_INTERVAL", 0))
-        self.stack.enter_context(mock.patch.object(window, "FRAME_INTERVAL", 0))
 
         primary, others = self.SCREENS
 

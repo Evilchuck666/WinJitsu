@@ -23,9 +23,9 @@ winjitsu --read-config PATH # 📂 Use a different config file for this run
 
 | Flag            | Config key          | Range  | Default | Description                                                       |
 |:----------------|:--------------------|:-------|:--------|:------------------------------------------------------------------|
-| `--steps N`     | `[animation] steps` | 1–1000 | `25`    | Animation steps of about 7 ms — higher is smoother but slower 🎞️ |
-| `--padding PX`  | `[display] padding` | 0–500  | `0`     | Gap in pixels around the window when fullscreening 📐             |
-| `--delay-ms MS` | `[daemon] delay_ms` | 0–5000 | `250`   | How long the daemon waits for a burst of key presses to end ⏱️    |
+| `--steps N`     | `[animation] steps` | 1–1000 | `25`    | Animation steps — higher is smoother but slower 🎞️             |
+| `--padding PX`  | `[display] padding` | 0–500  | `0`     | Gap in pixels around the window when fullscreening 📐          |
+| `--delay-ms MS` | `[daemon] delay_ms` | 0–5000 | `250`   | How long the daemon waits for a burst of key presses to end ⏱️ |
 
 A value outside its range is rejected on the command line; in the config file it falls back to its default with a warning, without affecting the other options.
 

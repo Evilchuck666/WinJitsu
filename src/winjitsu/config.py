@@ -86,7 +86,7 @@ def _write_config(config_path, active_config):
 # WinJitsu configuration
 
 [animation]
-# Steps in the window movement animation, about 7 ms each.
+# Steps in the window movement animation.
 # Higher = smoother but slower. 1-1000, default: 25
 steps = {active_config.steps}
 

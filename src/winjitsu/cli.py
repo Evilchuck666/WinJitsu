@@ -85,7 +85,7 @@ def main():
     parser.add_argument("--write-config",   action="store_true",                      help="write the current settings to the config file and exit")
     parser.add_argument("--read-config",    metavar="PATH",                           help="use a custom config file path")
     parser.add_argument("--see-config",     action="store_true",                      help="print current config values and exit")
-    parser.add_argument("--steps",    type=_option_type("steps"),    metavar="N",  help="animation steps of about 7 ms for --daemon, overrides config (1-1000, default: 25)")
+    parser.add_argument("--steps",    type=_option_type("steps"),    metavar="N",  help="animation steps for --daemon, overrides config (1-1000, default: 25)")
     parser.add_argument("--padding",  type=_option_type("padding"),  metavar="PX", help="fullscreen padding in pixels for --daemon, overrides config (0-500, default: 0)")
     parser.add_argument("--delay-ms", type=_option_type("delay_ms"), metavar="MS", help="debounce delay in milliseconds for --daemon, overrides config (0-5000, default: 250)")
     parsed_args = parser.parse_args()
