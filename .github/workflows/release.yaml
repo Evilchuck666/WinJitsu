@@ -2,8 +2,7 @@ name: Build and release
 
 # Disabled by default. Pushes and pull requests only build when the repository
 # variable WINJITSU_CI is set to "true" (Settings → Secrets and variables →
-# Actions → Variables); otherwise the run shows up as skipped and uses no
-# minutes. "Run workflow" always works: leave the version empty to just build,
+# Actions → Variables). Change detection and the final status remain active. "Run workflow" always works: leave the version empty to just build,
 # or give one (e.g. 0.4.0, matching pyproject.toml and arch/PKGBUILD) to also
 # publish a GitHub release with the wheel and the source distribution, upload
 # both to PyPI (Trusted Publishing, environment "pypi") and push arch/PKGBUILD
@@ -12,13 +11,6 @@ name: Build and release
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'pyproject.toml'
-      - 'README.md'
-      - 'LICENSE'
-      - 'arch/**'
-      - '.github/workflows/release.yaml'
   pull_request:
   workflow_dispatch:
     inputs:
@@ -40,9 +32,105 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
+  # Keep the workflow visible to required checks; only relevant jobs run.
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      checks: ${{ steps.filter.outputs.checks }}
+      metadata: ${{ steps.filter.outputs.metadata }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed files
+        id: filter
+        shell: python
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGE_FILTERS: |
+            {
+              "checks": {
+                "include": [
+                  "src/**",
+                  "tests/**",
+                  "pyproject.toml",
+                  "Makefile",
+                  "install-nightly.sh",
+                  ".github/workflows/release.yaml"
+                ],
+                "exclude": [
+                  "**/*.md",
+                  "**/LICENSE*"
+                ]
+              },
+              "metadata": {
+                "include": [
+                  "README.md",
+                  "LICENSE",
+                  "arch/**"
+                ],
+                "exclude": []
+              }
+            }
+        run: |
+          import fnmatch
+          import json
+          import os
+          import re
+          import subprocess
+
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+
+          filters = json.loads(os.environ['CHANGE_FILTERS'])
+          event = json.loads(open(os.environ['GITHUB_EVENT_PATH']).read())
+          event_name = os.environ['EVENT_NAME']
+          force = event_name in ('workflow_dispatch', 'schedule')
+          paths = []
+          if not force:
+              if event_name == 'pull_request':
+                  base = event['pull_request']['base']['sha']
+                  head = event['pull_request']['head']['sha']
+              else:
+                  base, head = event['before'], event['after']
+              if not all(re.fullmatch(r'[0-9a-fA-F]{40,64}', sha) for sha in (base, head)):
+                  raise SystemExit('Invalid Git object ID in event')
+              available = base.strip('0') and subprocess.run(
+                  ['git', 'cat-file', '-e', base + '^{commit}'],
+                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+              ).returncode == 0
+              if not available:
+                  # Initial/force pushes can omit the old commit. Validate everything safely.
+                  force = True
+              else:
+                  if event_name == 'pull_request':
+                      base = git('merge-base', base, head).decode().strip()
+                  paths = git('diff', '--no-renames', '--name-only', '-z', base, head).decode().split('\0')
+                  paths = [path for path in paths if path]
+
+          def matches(path, patterns):
+              # fnmatch's * includes /; a leading **/ also matches root-level files.
+              return any(fnmatch.fnmatchcase(path, pattern) or (
+                  pattern.startswith('**/') and fnmatch.fnmatchcase(path, pattern[3:])
+              ) for pattern in patterns)
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for name, patterns in filters.items():
+                  selected = force or any(
+                      matches(path, patterns['include']) and not matches(path, patterns.get('exclude', []))
+                      for path in paths
+                  )
+                  value = str(selected).lower()
+                  print(f'{name}={value}', file=output)
+                  print(f'{name}: {value}')
+
   package:
+    needs: [changes]
+    if: (needs.changes.outputs.checks == 'true' || needs.changes.outputs.metadata == 'true') && (github.event_name == 'workflow_dispatch' || vars.WINJITSU_CI == 'true')
     name: Build and smoke test
-    if: github.event_name == 'workflow_dispatch' || vars.WINJITSU_CI == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -70,6 +158,7 @@ jobs:
       # no X server here, so only check what works without one: the CLI, the
       # config handling and that every module imports.
       - name: Smoke test
+        if: needs.changes.outputs.checks == 'true'
         run: |
           set -euo pipefail
           for py in 3.10 3.14; do
@@ -85,6 +174,7 @@ jobs:
       # tests/fakes.py stands in for xdotool and the window manager, so the
       # unit tests run here too, against the installed wheel.
       - name: Unit tests
+        if: needs.changes.outputs.checks == 'true'
         run: |
           set -euo pipefail
           for py in 3.10 3.14; do
@@ -273,3 +363,26 @@ jobs:
           fi
           git commit -m "Update to $VERSION"
           git push origin master
+
+  result:
+    name: CI result
+    if: always()
+    needs: [changes, package, release, pypi, aur]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify required jobs
+        shell: python
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          import json
+          import os
+
+          results = json.loads(os.environ['RESULTS'])
+          failed = [name for name, job in results.items() if job['result'] in ('failure', 'cancelled')]
+          if results['changes']['result'] != 'success':
+              failed.append('changes')
+          if failed:
+              raise SystemExit('Unsuccessful jobs: ' + ', '.join(sorted(set(failed))))
+          print('All relevant jobs passed; unrelated jobs were skipped.')
